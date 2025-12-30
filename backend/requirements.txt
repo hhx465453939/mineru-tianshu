@@ -157,6 +157,9 @@ email-validator>=2.2.0   # Pydantic email 验证依赖
 # Logging
 loguru>=0.7.0
 
+# Environment Variable Management
+python-dotenv>=1.0.0
+
 # Office Document Parsing (MarkItDown backend)
 markitdown[all]>=0.1.3
 

@@ -20,7 +20,7 @@ from loguru import logger
 from pathlib import Path
 import argparse
 from utils import parse_list_arg
-
+from dotenv import load_dotenv
 
 class TianshuLauncher:
     """天枢服务启动器"""
@@ -283,6 +283,16 @@ class TianshuLauncher:
 
 def main():
     """主函数"""
+    
+    # 加载 .env 环境变量（在 backend 目录下）
+    env_path = Path(__file__).parent / ".env"
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+        logger.info(f"✅ Loaded .env from: {env_path}")
+    else:
+        logger.error(f"❌ .env file not found at: {env_path}")
+        logger.error("Please create a .env file in the backend directory with required environment variables")
+        sys.exit(1)
     parser = argparse.ArgumentParser(
         description="MinerU Tianshu - 统一启动脚本",
         formatter_class=argparse.RawDescriptionHelpFormatter,
