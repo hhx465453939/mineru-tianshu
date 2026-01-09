@@ -3,13 +3,22 @@
     <div class="max-w-md w-full">
       <!-- Logo 和标题 -->
       <div class="text-center mb-8">
-        <h1 class="text-4xl font-bold text-gray-900 mb-2">MinerU Tianshu</h1>
-        <p class="text-gray-600">天枢 - 企业级 AI 数据预处理平台</p>
+        <!-- Logo -->
+        <div v-if="systemConfig.system_logo" class="mb-4 flex justify-center">
+          <img
+            :src="systemConfig.system_logo"
+            :alt="`${systemConfig.system_name} Logo`"
+            class="h-16 object-contain"
+            @error="handleLogoError"
+          />
+        </div>
+        <h1 class="text-4xl font-bold text-gray-900 mb-2">{{ systemConfig.system_name }}</h1>
+        <p class="text-gray-600">{{ $t('auth.systemSubtitle') }}</p>
       </div>
 
       <!-- 登录表单 -->
       <div class="bg-white rounded-2xl shadow-xl p-8">
-        <h2 class="text-2xl font-semibold text-gray-900 mb-6">{{ $t('auth.loginTitle') }}</h2>
+        <h2 class="text-2xl font-semibold text-gray-900 mb-6">{{ $t('auth.loginTitle', { systemName: systemConfig.system_name }) }}</h2>
 
         <form @submit.prevent="handleLogin" class="space-y-4">
           <!-- 用户名 -->
@@ -60,7 +69,7 @@
         </form>
 
         <!-- 注册链接 -->
-        <div class="mt-6 text-center">
+        <div v-if="allowRegistration" class="mt-6 text-center">
           <p class="text-sm text-gray-600">
             {{ $t('auth.noAccount') }}
             <router-link to="/register" class="text-blue-600 hover:text-blue-700 font-medium">
@@ -68,30 +77,21 @@
             </router-link>
           </p>
         </div>
-
-        <!-- 默认账号提示 -->
-        <div class="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p class="text-sm text-yellow-800">
-            <strong>默认管理员账户：</strong><br>
-            用户名: <code class="bg-yellow-100 px-1 rounded">admin</code><br>
-            密码: <code class="bg-yellow-100 px-1 rounded">admin123</code><br>
-            <span class="text-xs text-yellow-700">⚠️ 首次登录后请立即修改密码</span>
-          </p>
-        </div>
       </div>
 
       <!-- 版权信息 -->
       <div class="mt-8 text-center text-sm text-gray-600">
-        <p>MinerU Tianshu v2.0 - 支持企业级认证授权</p>
+
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores'
+import { getSystemConfig, type SystemConfig } from '@/api'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -101,6 +101,14 @@ const form = reactive({
   password: '',
 })
 
+const allowRegistration = ref(true) // 默认允许注册
+const systemConfig = ref<SystemConfig>({
+  system_name: 'MinerU Tianshu',
+  system_logo: '',
+  show_github_star: true,
+  allow_registration: true,
+})
+
 async function handleLogin() {
   const success = await authStore.login(form)
   if (success) {
@@ -108,4 +116,34 @@ async function handleLogin() {
     router.push('/')
   }
 }
+
+/**
+ * Logo 加载失败处理
+ */
+function handleLogoError(event: Event) {
+  const target = event.target as HTMLImageElement
+  target.style.display = 'none'
+}
+
+/**
+ * 加载系统配置
+ */
+async function loadSystemConfig() {
+  try {
+    const response = await getSystemConfig()
+    systemConfig.value = response.config
+    allowRegistration.value = response.config.allow_registration !== false
+
+    // 更新页面标题
+    document.title = `${systemConfig.value.system_name} - 登录`
+  } catch (error) {
+    console.error('Failed to load system config:', error)
+    // 失败时使用默认配置
+    allowRegistration.value = true
+  }
+}
+
+onMounted(() => {
+  loadSystemConfig()
+})
 </script>

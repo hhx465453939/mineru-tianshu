@@ -2,7 +2,7 @@
  * Vue Router 配置
  */
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '@/stores'
+import { useAuthStore, useSystemStore } from '@/stores'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -70,6 +70,12 @@ const router = createRouter({
           meta: { title: '用户管理', requiresAdmin: true }
         },
         {
+          path: 'system-config',
+          name: 'system-config',
+          component: () => import('@/views/SystemConfig.vue'),
+          meta: { title: '系统配置', requiresAdmin: true }
+        },
+        {
           path: 'api-docs',
           name: 'api-docs',
           component: () => import('@/views/ApiDocsScalar.vue'),
@@ -82,14 +88,20 @@ const router = createRouter({
 
 // 全局导航守卫
 router.beforeEach(async (to, _from, next) => {
-  // 设置页面标题
-  if (to.meta.title) {
-    document.title = `${to.meta.title} - MinerU Tianshu`
-  } else {
-    document.title = 'MinerU Tianshu - 文档解析服务'
+  const authStore = useAuthStore()
+  const systemStore = useSystemStore()
+
+  // 确保系统配置已加载（用于页面标题）
+  if (!systemStore.config.system_name || systemStore.config.system_name === 'MinerU Tianshu') {
+    await systemStore.loadConfig()
   }
 
-  const authStore = useAuthStore()
+  // 设置页面标题
+  if (to.meta.title) {
+    systemStore.updatePageTitle(to.meta.title as string)
+  } else {
+    document.title = systemStore.config.system_name
+  }
 
   // 🔥 关键修复：如果有 token 但没有用户信息，先初始化
   // 这解决了刷新页面时的竞态条件问题

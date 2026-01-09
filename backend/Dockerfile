@@ -99,28 +99,45 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     --default-timeout=300 \
     --retries 5
 
-# Step 4: 安装核心包（使用 --no-deps 避免重新解析依赖）
+# Step 4: 安装 MinerU 及其依赖（允许自动解析依赖）
 RUN --mount=type=cache,target=/root/.cache/pip \
-    echo "Installing core packages..." && \
-    pip install mineru[core] paddleocr[doc-parser] \
+    echo "Installing MinerU with dependencies..." && \
+    pip install mineru[core] \
+    -i https://pypi.tuna.tsinghua.edu.cn/simple \
+    --break-system-packages \
+    --default-timeout=600 \
+    --retries 5
+
+# Step 4.5: 安装其他核心包
+RUN --mount=type=cache,target=/root/.cache/pip \
+    echo "Installing other core packages..." && \
+    pip install paddleocr[doc-parser] \
     transformers==4.46.3 tokenizers==0.20.3 \
     fastapi uvicorn litserve aiohttp \
     PyMuPDF Pillow img2pdf einops easydict addict loguru modelscope \
-    albumentations minio markitdown \
+    minio markitdown \
     -i https://pypi.tuna.tsinghua.edu.cn/simple \
     --break-system-packages \
-    --no-deps \
     --default-timeout=300 \
-    --retries 5 || echo "⚠ Some packages skipped (will be resolved in next step)"
+    --retries 5
 
-# Step 5: 安装 safetensors（PaddlePaddle 依赖）
+# Step 5: 确保 albumentations 版本兼容（MinerU 2.6.2 需要 1.3.x）
+RUN --mount=type=cache,target=/root/.cache/pip \
+    echo "Ensuring albumentations compatibility..." && \
+    pip install 'albumentations>=1.3.1,<1.4.0' 'albucore>=0.0.13,<0.0.17' \
+    -i https://pypi.tuna.tsinghua.edu.cn/simple \
+    --break-system-packages \
+    --default-timeout=300 \
+    --retries 5
+
+# Step 6: 安装 safetensors（PaddlePaddle 依赖）
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --break-system-packages \
     --default-timeout=300 \
     --retries 5 \
     https://paddle-whl.bj.bcebos.com/nightly/cu126/safetensors/safetensors-0.6.2.dev0-cp38-abi3-linux_x86_64.whl
 
-# Step 6: 解析剩余依赖（使用 legacy resolver，避免回溯超时）
+# Step 7: 解析剩余依赖（使用 legacy resolver，避免回溯超时）
 RUN --mount=type=cache,target=/root/.cache/pip \
     echo "Resolving remaining dependencies with legacy resolver..." && \
     pip install -r /tmp/requirements.txt \

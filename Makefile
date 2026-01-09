@@ -20,6 +20,16 @@ else
     COMPOSE_CMD := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || (command -v docker-compose >/dev/null 2>&1 && echo "docker-compose" || echo "docker-compose"))
 endif
 
+# 检测是否启用 Redis（从 .env 文件读取）
+REDIS_ENABLED := $(shell [ -f .env ] && grep -E "^REDIS_QUEUE_ENABLED=true" .env >/dev/null 2>&1 && echo "true" || echo "false")
+ifeq ($(REDIS_ENABLED),true)
+    COMPOSE_PROFILE := --profile redis
+    REDIS_STATUS := enabled
+else
+    COMPOSE_PROFILE :=
+    REDIS_STATUS := disabled
+endif
+
 # 颜色输出
 RED := \033[0;31m
 GREEN := \033[0;32m
@@ -43,6 +53,7 @@ help: ## 显示帮助信息
 	@echo "系统信息:"
 	@echo "  操作系统: $(DETECTED_OS)"
 	@echo "  Docker Compose: $(COMPOSE_CMD)"
+	@echo "  Redis 队列: $(REDIS_STATUS)"
 	@echo ""
 
 # ============================================================================
@@ -86,7 +97,8 @@ check: ## 检查系统依赖
 # ============================================================================
 build: ## 构建所有 Docker 镜像
 	@echo "$(BLUE)[INFO]$(NC) 构建 Docker 镜像..."
-	@$(COMPOSE_CMD) build --parallel
+	@echo "$(BLUE)[INFO]$(NC) Redis 队列: $(REDIS_STATUS)"
+	@$(COMPOSE_CMD) $(COMPOSE_PROFILE) build --parallel
 	@echo "$(GREEN)[OK]$(NC) 镜像构建完成"
 
 build-backend: ## 仅构建后端镜像
@@ -106,24 +118,25 @@ build-no-cache: ## 强制重新构建（不使用缓存）
 # ============================================================================
 start: ## 启动所有服务（生产环境）
 	@echo "$(BLUE)[INFO]$(NC) 启动生产环境..."
-	@$(COMPOSE_CMD) up -d
+	@echo "$(BLUE)[INFO]$(NC) Redis 队列: $(REDIS_STATUS)"
+	@$(COMPOSE_CMD) $(COMPOSE_PROFILE) up -d
 	@echo "$(GREEN)[OK]$(NC) 服务启动中，等待就绪..."
 	@sleep 10
 	@$(MAKE) status
 
 stop: ## 停止所有服务
 	@echo "$(BLUE)[INFO]$(NC) 停止服务..."
-	@$(COMPOSE_CMD) stop
+	@$(COMPOSE_CMD) $(COMPOSE_PROFILE) stop
 	@echo "$(GREEN)[OK]$(NC) 服务已停止"
 
 down: ## 停止并删除容器
 	@echo "$(BLUE)[INFO]$(NC) 停止并删除容器..."
-	@$(COMPOSE_CMD) down
+	@$(COMPOSE_CMD) $(COMPOSE_PROFILE) down
 	@echo "$(GREEN)[OK]$(NC) 容器已删除"
 
 restart: ## 重启所有服务
 	@echo "$(BLUE)[INFO]$(NC) 重启服务..."
-	@$(COMPOSE_CMD) restart
+	@$(COMPOSE_CMD) $(COMPOSE_PROFILE) restart
 	@echo "$(GREEN)[OK]$(NC) 服务已重启"
 
 # ============================================================================
@@ -146,10 +159,10 @@ dev-logs: ## 查看开发环境日志
 # 日志和状态
 # ============================================================================
 status: ## 查看服务状态
-	@$(COMPOSE_CMD) ps
+	@$(COMPOSE_CMD) $(COMPOSE_PROFILE) ps
 
 logs: ## 查看所有服务日志
-	@$(COMPOSE_CMD) logs -f
+	@$(COMPOSE_CMD) $(COMPOSE_PROFILE) logs -f
 
 logs-backend: ## 查看后端日志
 	@$(COMPOSE_CMD) logs -f backend
@@ -229,6 +242,9 @@ info: ## 显示访问信息
 	@echo "  - API 文档: http://localhost:8000/docs"
 	@echo "  - Worker:   http://localhost:8001"
 	@echo "  - MCP:      http://localhost:8002"
+ifeq ($(REDIS_ENABLED),true)
+	@echo "  - Redis:    localhost:6379"
+endif
 	@echo ""
 	@echo "$(BLUE)[INFO]$(NC) 常用命令:"
 	@echo "  - 查看状态: make status"

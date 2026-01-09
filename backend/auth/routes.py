@@ -5,7 +5,7 @@ MinerU Tianshu - Authentication Routes
 提供用户注册、登录、API Key 管理、SSO 等接口
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File
 from fastapi.responses import RedirectResponse
 from typing import List
 from datetime import timedelta
@@ -30,6 +30,8 @@ from .dependencies import (
     require_permission,
 )
 from .sso import get_sso_config, create_sso_provider, OIDC_AVAILABLE
+from .system_config import SystemConfig
+from storage.rustfs_client import get_rustfs_client
 
 # 创建路由
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
@@ -424,3 +426,149 @@ if OIDC_AVAILABLE:
             return RedirectResponse(url=f"{frontend_url}?token={access_token}")
 
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="SAML not implemented yet")
+
+
+# ==================== 系统配置管理 (管理员) ====================
+
+
+@router.get("/system/config")
+async def get_system_config():
+    """
+    获取系统配置
+
+    公开接口，无需认证。返回系统名称、Logo、GitHub Star 显示、注册开关等配置。
+    """
+    config = SystemConfig()
+    configs = config.get_all_configs()
+
+    # 转换布尔值配置项
+    return {
+        "success": True,
+        "config": {
+            "system_name": configs.get("system_name", "MinerU Tianshu"),
+            "system_logo": configs.get("system_logo", ""),
+            "show_github_star": configs.get("show_github_star", "true") == "true",
+            "allow_registration": configs.get("allow_registration", "true") == "true",
+        },
+    }
+
+
+@router.post("/system/config")
+async def update_system_config(
+    config_data: dict,
+    current_user: User = Depends(require_permission(Permission.SYSTEM_CONFIG)),
+):
+    """
+    更新系统配置 (管理员)
+
+    需要管理员权限。可以更新系统名称、Logo、GitHub Star 显示、注册开关等配置。
+
+    请求体示例:
+    {
+        "system_name": "My Custom System",
+        "system_logo": "https://example.com/logo.png",
+        "show_github_star": false,
+        "allow_registration": true
+    }
+    """
+    config = SystemConfig()
+
+    # 允许的配置键
+    allowed_keys = {"system_name", "system_logo", "show_github_star", "allow_registration"}
+    update_data = {}
+
+    for key, value in config_data.items():
+        if key in allowed_keys:
+            # 转换布尔值配置项为字符串
+            if key in {"show_github_star", "allow_registration"}:
+                update_data[key] = "true" if value else "false"
+            else:
+                update_data[key] = str(value)
+
+    if not update_data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid configuration provided")
+
+    success = config.update_configs(update_data)
+
+    if not success:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update configuration")
+
+    logger.info(f"✅ System config updated by {current_user.username}: {list(update_data.keys())}")
+
+    # 返回更新后的配置
+    updated_configs = config.get_all_configs()
+    return {
+        "success": True,
+        "message": "Configuration updated successfully",
+        "config": {
+            "system_name": updated_configs.get("system_name", "MinerU Tianshu"),
+            "system_logo": updated_configs.get("system_logo", ""),
+            "show_github_star": updated_configs.get("show_github_star", "true") == "true",
+            "allow_registration": updated_configs.get("allow_registration", "true") == "true",
+        },
+    }
+
+
+@router.post("/system/logo/upload")
+async def upload_system_logo(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_permission(Permission.SYSTEM_CONFIG)),
+):
+    """
+    上传系统 Logo (管理员)
+
+    需要管理员权限。上传 Logo 图片文件到 RustFS，支持 PNG、JPG、SVG 等格式。
+    """
+    import tempfile
+    from pathlib import Path
+
+    # 检查文件类型
+    allowed_extensions = {".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp"}
+    file_ext = Path(file.filename).suffix.lower()
+
+    if file_ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}",
+        )
+
+    # 检查文件大小 (最大 5MB)
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:  # 5MB
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File size exceeds 5MB limit")
+
+    try:
+        # 创建临时文件保存上传的图片
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp_file:
+            tmp_file.write(content)
+            tmp_file_path = tmp_file.name
+
+        # 上传到 RustFS (使用 logos/ 前缀)
+        rustfs = get_rustfs_client()
+        logo_url = rustfs.upload_file(
+            file_path=tmp_file_path,
+            object_name=f"logos/logo{file_ext}",  # 固定名称，方便替换
+        )
+
+        # 清理临时文件
+        Path(tmp_file_path).unlink()
+
+        # 更新系统配置
+        config = SystemConfig()
+        config.set_config("system_logo", logo_url)
+
+        logger.info(f"✅ Logo uploaded by {current_user.username}: {logo_url}")
+
+        return {
+            "success": True,
+            "message": "Logo uploaded successfully",
+            "logo_url": logo_url,
+        }
+    except Exception as e:
+        logger.error(f"❌ Failed to upload logo: {e}")
+        # 清理临时文件
+        if "tmp_file_path" in locals() and Path(tmp_file_path).exists():
+            Path(tmp_file_path).unlink()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to upload logo: {str(e)}"
+        )

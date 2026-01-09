@@ -29,6 +29,21 @@ else
 fi
 
 # ============================================================================
+# Detect Redis configuration
+# ============================================================================
+detect_redis_config() {
+    if [ -f .env ] && grep -qE "^REDIS_QUEUE_ENABLED=true" .env; then
+        REDIS_ENABLED="true"
+        COMPOSE_PROFILE="--profile redis"
+        log_info "Redis queue: enabled"
+    else
+        REDIS_ENABLED="false"
+        COMPOSE_PROFILE=""
+        log_info "Redis queue: disabled (using SQLite)"
+    fi
+}
+
+# ============================================================================
 # Check dependencies
 # ============================================================================
 check_dependencies() {
@@ -122,11 +137,14 @@ build_images() {
     log_info "Using BuildKit cache optimization to avoid redundant downloads on subsequent builds"
     echo ""
 
+    # 检测 Redis 配置
+    detect_redis_config
+
     # 启用 BuildKit 缓存挂载，避免重复下载大文件
     export DOCKER_BUILDKIT=1
     export COMPOSE_DOCKER_CLI_BUILD=1
 
-    $COMPOSE_CMD build --parallel
+    $COMPOSE_CMD $COMPOSE_PROFILE build --parallel
 
     log_success "Image build completed"
     log_info "Tip: Subsequent builds will use cache and be much faster"
@@ -138,12 +156,15 @@ build_images() {
 start_services() {
     local mode=${1:-prod}
 
+    # 检测 Redis 配置
+    detect_redis_config
+
     if [ "$mode" = "dev" ]; then
         log_info "Starting development environment..."
         $COMPOSE_CMD -f docker-compose.dev.yml up -d
     else
         log_info "Starting production environment..."
-        $COMPOSE_CMD up -d
+        $COMPOSE_CMD $COMPOSE_PROFILE up -d
     fi
 
     log_success "Services starting..."
@@ -153,7 +174,7 @@ start_services() {
     sleep 10
 
     # Check service status
-    $COMPOSE_CMD ps
+    $COMPOSE_CMD $COMPOSE_PROFILE ps
 }
 
 # ============================================================================
@@ -169,6 +190,9 @@ show_info() {
     echo "  - API Docs:      http://localhost:$(grep API_PORT .env | cut -d'=' -f2 || echo 8000)/docs"
     echo "  - Worker:        http://localhost:$(grep WORKER_PORT .env | cut -d'=' -f2 || echo 8001)"
     echo "  - MCP:           http://localhost:$(grep MCP_PORT .env | cut -d'=' -f2 || echo 8002)"
+    if [ "$REDIS_ENABLED" = "true" ]; then
+        echo "  - Redis:         localhost:$(grep REDIS_PORT .env | cut -d'=' -f2 || echo 6379)"
+    fi
     echo ""
     log_info "Common commands:"
     echo "  - View logs:     $COMPOSE_CMD logs -f"
@@ -223,25 +247,30 @@ show_menu() {
             ;;
         4)
             log_info "Stopping services..."
-            $COMPOSE_CMD down
+            detect_redis_config
+            $COMPOSE_CMD $COMPOSE_PROFILE down
             log_success "Services stopped"
             ;;
         5)
             log_info "Restarting services..."
-            $COMPOSE_CMD restart
+            detect_redis_config
+            $COMPOSE_CMD $COMPOSE_PROFILE restart
             log_success "Services restarted"
             ;;
         6)
-            $COMPOSE_CMD ps
+            detect_redis_config
+            $COMPOSE_CMD $COMPOSE_PROFILE ps
             ;;
         7)
-            $COMPOSE_CMD logs -f
+            detect_redis_config
+            $COMPOSE_CMD $COMPOSE_PROFILE logs -f
             ;;
         8)
             log_warning "This operation will delete all data (including database, uploaded files, models)"
             read -p "Confirm deletion? (yes/no): " confirm
             if [ "$confirm" = "yes" ]; then
-                $COMPOSE_CMD down -v
+                detect_redis_config
+                $COMPOSE_CMD $COMPOSE_PROFILE down -v
                 rm -rf data/ logs/ models/
                 log_success "Data cleaned"
             else
@@ -284,7 +313,8 @@ main() {
                 start_services dev
                 ;;
             stop)
-                $COMPOSE_CMD down
+                detect_redis_config
+                $COMPOSE_CMD $COMPOSE_PROFILE down
                 ;;
             *)
                 log_error "Unknown command: $1"

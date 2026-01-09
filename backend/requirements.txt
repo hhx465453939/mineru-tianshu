@@ -55,6 +55,12 @@
 # MinerU - Core OCR Pipeline
 mineru[core]==2.6.2
 
+# DocLayout YOLO - Layout detection model (MinerU dependency)
+doclayout-yolo>=0.0.2
+
+# Text cleaning (MinerU Unimernet dependency)
+ftfy>=6.1.0
+
 # PaddleOCR-VL - Document Parser (Auto language detection for 109+ languages)
 paddleocr[doc-parser]
 
@@ -70,9 +76,10 @@ Pillow>=11.0.0   # Image processing (Python 3.12 需要 11.0+)
 img2pdf>=0.5.0   # Image to PDF conversion
 pikepdf>=9.0.0   # Fast PDF manipulation (for PDF splitting, 6-8x faster than pypdf)
 
-# Image Augmentation (Python 3.12 兼容版本)
-albumentations>=1.4.4,<2.0.0
-albucore>=0.0.13,<0.0.20
+# Image Augmentation (MinerU 2.6.2 兼容版本)
+# 注意: albumentations 1.4.x 有 API 变更，MinerU 2.6.2 需要 1.3.x 版本
+albumentations>=1.3.1,<1.4.0
+albucore>=0.0.13,<0.0.17
 kiwisolver>=1.4.5  # Python 3.12 必需
 matplotlib>=3.9.0  # Python 3.12 兼容
 contourpy>=1.3.0   # matplotlib 依赖,Python 3.12 兼容

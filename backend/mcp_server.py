@@ -252,8 +252,11 @@ async def parse_document(args: dict) -> list[TextContent]:
 
                 # 创建临时文件（使用共享上传目录）
                 import uuid
+                import os
 
-                upload_dir = Path("/app/uploads")
+                project_root = Path(__file__).parent.parent
+                default_upload = project_root / "data" / "uploads"
+                upload_dir = Path(os.getenv("UPLOAD_PATH", str(default_upload)))
                 upload_dir.mkdir(parents=True, exist_ok=True)
                 temp_file_path = upload_dir / f"{uuid.uuid4().hex}_{file_name}"
                 temp_file_path.write_bytes(file_content)
@@ -310,8 +313,11 @@ async def parse_document(args: dict) -> list[TextContent]:
 
                         # 创建临时文件（使用共享上传目录）
                         import uuid
+                        import os
 
-                        upload_dir = Path("/app/uploads")
+                        project_root = Path(__file__).parent.parent
+                        default_upload = project_root / "data" / "uploads"
+                        upload_dir = Path(os.getenv("UPLOAD_PATH", str(default_upload)))
                         upload_dir.mkdir(parents=True, exist_ok=True)
                         temp_file_path = upload_dir / f"{uuid.uuid4().hex}_{file_name}"
                         temp_file_path.write_bytes(file_content)

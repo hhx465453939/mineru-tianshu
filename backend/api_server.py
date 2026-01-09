@@ -51,6 +51,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 获取项目根目录（backend 的父目录）
+PROJECT_ROOT = Path(__file__).parent.parent
+
 # 初始化数据库
 # 确保使用环境变量中的数据库路径（与 Worker 保持一致）
 db_path_env = os.getenv("DATABASE_PATH")
@@ -60,8 +63,12 @@ if db_path_env:
     db = TaskDB(db_path)
 else:
     logger.warning("⚠️  DATABASE_PATH not set in API Server, using default")
-    # 使用与 Worker 一致的默认路径
-    db_path = "/app/data/db/mineru_tianshu.db"
+    # Docker 环境: /app/data/db/mineru_tianshu.db
+    # 本地环境: ./data/db/mineru_tianshu.db
+    default_db_path = PROJECT_ROOT / "data" / "db" / "mineru_tianshu.db"
+    default_db_path.parent.mkdir(parents=True, exist_ok=True)
+    db_path = str(default_db_path.resolve())
+    logger.info(f"📊 Using default database path: {db_path}")
     db = TaskDB(db_path)
 auth_db = AuthDB()
 
@@ -69,8 +76,15 @@ auth_db = AuthDB()
 app.include_router(auth_router)
 
 # 配置输出目录（使用共享目录，Docker 环境可访问）
-OUTPUT_DIR = Path(os.getenv("OUTPUT_PATH", "/app/output"))
+output_path_env = os.getenv("OUTPUT_PATH")
+if output_path_env:
+    OUTPUT_DIR = Path(output_path_env)
+else:
+    # Docker 环境: /app/output
+    # 本地环境: ./data/output
+    OUTPUT_DIR = PROJECT_ROOT / "data" / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+logger.info(f"📁 Output directory: {OUTPUT_DIR.resolve()}")
 
 
 # 注意：此函数已废弃，Worker 已自动上传图片到 RustFS 并替换 URL
@@ -203,7 +217,13 @@ async def submit_task(
     """
     try:
         # 创建共享的上传目录（Backend 和 Worker 都能访问）
-        upload_dir = Path("/app/uploads")
+        upload_path_env = os.getenv("UPLOAD_PATH")
+        if upload_path_env:
+            upload_dir = Path(upload_path_env)
+        else:
+            # Docker 环境: /app/uploads
+            # 本地环境: ./data/uploads
+            upload_dir = PROJECT_ROOT / "data" / "uploads"
         upload_dir.mkdir(parents=True, exist_ok=True)
 
         # 生成唯一的文件名（避免冲突）

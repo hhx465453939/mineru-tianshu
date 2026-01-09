@@ -22,9 +22,11 @@ from loguru import logger
 # 导入 Redis 队列（可选）
 try:
     from redis_queue import get_redis_queue
+
     REDIS_QUEUE_AVAILABLE = True
 except ImportError:
     REDIS_QUEUE_AVAILABLE = False
+
     def get_redis_queue():
         return None
 
@@ -39,7 +41,12 @@ class TaskDB:
 
         # 优先使用传入的路径，其次使用环境变量，最后使用默认路径
         if db_path is None:
-            db_path = os.getenv("DATABASE_PATH", "/app/data/db/mineru_tianshu.db")
+            # 获取项目根目录
+            project_root = Path(__file__).parent.parent
+            default_db = project_root / "data" / "db" / "mineru_tianshu.db"
+            db_path = os.getenv("DATABASE_PATH", str(default_db))
+            # 确保父目录存在
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
             # 确保使用绝对路径
             db_path = str(Path(db_path).resolve())
         else:
@@ -165,10 +172,14 @@ class TaskDB:
             )
 
         # 入队到 Redis（如果可用）
-        self._enqueue_to_redis(task_id, priority, {
-            "file_name": file_name,
-            "backend": backend,
-        })
+        self._enqueue_to_redis(
+            task_id,
+            priority,
+            {
+                "file_name": file_name,
+                "backend": backend,
+            },
+        )
 
         return task_id
 

@@ -181,7 +181,10 @@ class MinerUWorkerAPI(ls.LitAPI):
         初始化 API：直接在这里接收所有需要的参数
         """
         super().__init__()
-        self.output_dir = output_dir or os.getenv("OUTPUT_PATH", "/app/output")
+        # 获取项目根目录
+        project_root = Path(__file__).parent.parent
+        default_output = project_root / "data" / "output"
+        self.output_dir = output_dir or os.getenv("OUTPUT_PATH", str(default_output))
         self.poll_interval = poll_interval
         self.enable_worker_loop = enable_worker_loop
         self.paddleocr_vl_vllm_engine_enabled = paddleocr_vl_vllm_engine_enabled
@@ -260,7 +263,9 @@ class MinerUWorkerAPI(ls.LitAPI):
         self.device = device
         # 从类属性获取配置（由 start_litserve_workers 设置）
         # 默认使用共享输出目录（Docker 环境）
-        default_output = os.getenv("OUTPUT_PATH", "/app/output")
+        project_root = Path(__file__).parent.parent
+        default_output_path = project_root / "data" / "output"
+        default_output = os.getenv("OUTPUT_PATH", str(default_output_path))
         self.output_dir = getattr(self.__class__, "_output_dir", default_output)
         self.poll_interval = getattr(self.__class__, "_poll_interval", 0.5)
         self.enable_worker_loop = getattr(self.__class__, "_enable_worker_loop", True)
@@ -316,7 +321,9 @@ class MinerUWorkerAPI(ls.LitAPI):
             logger.info(f"📊 Using DATABASE_PATH from environment: {db_path_env} -> {db_path}")
         else:
             # 默认路径（与 TaskDB 和 AuthDB 保持一致）
-            db_path = Path("/app/data/db/mineru_tianshu.db").resolve()
+            project_root = Path(__file__).parent.parent
+            default_db = project_root / "data" / "db" / "mineru_tianshu.db"
+            db_path = default_db.resolve()
             logger.warning(f"⚠️  DATABASE_PATH not set, using default: {db_path}")
 
         # 确保数据库目录存在
@@ -1390,7 +1397,9 @@ def start_litserve_workers(
 
     # 如果没有指定输出目录，从环境变量读取
     if output_dir is None:
-        output_dir = os.getenv("OUTPUT_PATH", "/app/output")
+        project_root = Path(__file__).parent.parent
+        default_output = project_root / "data" / "output"
+        output_dir = os.getenv("OUTPUT_PATH", str(default_output))
 
     logger.info("=" * 60)
     logger.info("🚀 Starting MinerU Tianshu LitServe Worker Pool")

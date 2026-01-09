@@ -241,7 +241,9 @@ class PDFWatermarkHandler:
         import uuid
         import os
 
-        output_base = Path(os.getenv("OUTPUT_PATH", "/app/output"))
+        project_root = Path(__file__).parent.parent.parent
+        default_output = project_root / "data" / "output"
+        output_base = Path(os.getenv("OUTPUT_PATH", str(default_output)))
         temp_dir = output_base / f"pdf_watermark_{uuid.uuid4().hex}"
         temp_dir.mkdir(parents=True, exist_ok=True)
 

@@ -9,7 +9,19 @@
             <!-- Logo -->
             <div class="flex-shrink-0 flex items-center">
               <router-link to="/" class="flex items-center gap-2 group">
-                <img src="/logo.svg" alt="Tianshu Logo" class="h-8 lg:h-10 transition-transform group-hover:scale-105" />
+                <img
+                  v-if="systemStore.config.system_logo"
+                  :src="systemStore.config.system_logo"
+                  :alt="`${systemStore.config.system_name} Logo`"
+                  class="h-8 lg:h-10 transition-transform group-hover:scale-105"
+                  @error="handleLogoError"
+                />
+                <img
+                  v-else
+                  src="/logo.svg"
+                  :alt="`${systemStore.config.system_name} Logo`"
+                  class="h-8 lg:h-10 transition-transform group-hover:scale-105"
+                />
               </router-link>
             </div>
 
@@ -47,6 +59,7 @@
 
             <!-- GitHub Star 按钮 - 仅大屏显示 -->
             <a
+              v-if="systemStore.config.show_github_star"
               href="https://github.com/magicyuan876/mineru-tianshu"
               target="_blank"
               rel="noopener noreferrer"
@@ -157,6 +170,16 @@
                   <span>{{ $t('nav.userManagement') }}</span>
                 </router-link>
 
+                <router-link
+                  v-if="authStore.isAdmin"
+                  to="/system-config"
+                  @click="userMenuOpen = false"
+                  class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+                >
+                  <Settings class="w-4 h-4" />
+                  <span>{{ $t('nav.systemConfig') }}</span>
+                </router-link>
+
                 <div class="border-t border-gray-200 my-2"></div>
 
                 <button
@@ -260,6 +283,15 @@
               <Users class="w-4 h-4" />
               <span>{{ $t('nav.userManagement') }}</span>
             </router-link>
+            <router-link
+              v-if="authStore.isAdmin"
+              to="/system-config"
+              @click="mobileMenuOpen = false"
+              class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-gray-50 rounded-lg mb-2"
+            >
+              <Settings class="w-4 h-4" />
+              <span>{{ $t('nav.systemConfig') }}</span>
+            </router-link>
             <button
               @click="handleLogout"
               class="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 bg-red-50 rounded-lg"
@@ -286,7 +318,7 @@
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div class="flex flex-col items-center gap-3">
           <!-- GitHub Star 提示 -->
-          <div class="flex items-center gap-2 text-sm">
+          <div v-if="systemStore.config.show_github_star" class="flex items-center gap-2 text-sm">
             <span class="text-gray-600">{{ $t('footer.likeProject') }}</span>
             <a
               href="https://github.com/magicyuan876/mineru-tianshu"
@@ -302,7 +334,7 @@
 
           <!-- 版权信息 -->
           <p class="text-center text-sm text-gray-500">
-            {{ $t('footer.copyright') }}
+            © 2024 {{ systemStore.config.system_name }} - {{ $t('footer.copyright').split(' - ')[1] }}
           </p>
         </div>
       </div>
@@ -314,7 +346,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQueueStore, useAuthStore, useLocaleStore } from '@/stores'
+import { useQueueStore, useAuthStore, useLocaleStore, useSystemStore } from '@/stores'
 import type { SupportLocale } from '@/locales'
 import {
   LayoutDashboard,
@@ -341,6 +373,7 @@ const { locale } = useI18n()
 const queueStore = useQueueStore()
 const authStore = useAuthStore()
 const localeStore = useLocaleStore()
+const systemStore = useSystemStore()
 const mobileMenuOpen = ref(false)
 const userMenuOpen = ref(false)
 const langMenuOpen = ref(false)
@@ -399,6 +432,14 @@ function handleLogout() {
   router.push('/login')
 }
 
+// 处理 Logo 加载错误
+function handleLogoError(event: Event) {
+  const img = event.target as HTMLImageElement
+  // 加载失败时使用默认 logo
+  img.src = '/logo.svg'
+  console.warn('Failed to load custom logo, using default logo')
+}
+
 // 点击外部关闭菜单
 function handleClickOutside(event: MouseEvent) {
   if (userMenuRef.value && !userMenuRef.value.contains(event.target as Node)) {
@@ -423,6 +464,9 @@ function handleVisibilityChange() {
 }
 
 onMounted(() => {
+  // 加载系统配置
+  systemStore.loadConfig()
+
   // 启动自动刷新队列统计（智能轮询）
   queueStore.startAutoRefresh(5000)
 

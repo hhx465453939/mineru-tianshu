@@ -3,13 +3,41 @@
     <div class="max-w-md w-full">
       <!-- Logo 和标题 -->
       <div class="text-center mb-8">
-        <h1 class="text-4xl font-bold text-gray-900 mb-2">MinerU Tianshu</h1>
-        <p class="text-gray-600">天枢 - 企业级 AI 数据预处理平台</p>
+        <!-- Logo -->
+        <div v-if="systemConfig.system_logo" class="mb-4 flex justify-center">
+          <img
+            :src="systemConfig.system_logo"
+            :alt="`${systemConfig.system_name} Logo`"
+            class="h-16 object-contain"
+            @error="handleLogoError"
+          />
+        </div>
+        <h1 class="text-4xl font-bold text-gray-900 mb-2">{{ systemConfig.system_name }}</h1>
+        <p class="text-gray-600">{{ $t('auth.systemSubtitle') }}</p>
+      </div>
+
+      <!-- 注册功能已关闭提示 -->
+      <div v-if="!allowRegistration" class="bg-white rounded-2xl shadow-xl p-8">
+        <div class="text-center">
+          <svg class="mx-auto h-12 w-12 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <h2 class="mt-4 text-xl font-semibold text-gray-900">{{ $t('auth.registrationDisabled') }}</h2>
+          <p class="mt-2 text-sm text-gray-600">{{ $t('auth.registrationDisabledMessage') }}</p>
+          <div class="mt-6">
+            <router-link
+              to="/login"
+              class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              {{ $t('auth.goToLogin') }}
+            </router-link>
+          </div>
+        </div>
       </div>
 
       <!-- 注册表单 -->
-      <div class="bg-white rounded-2xl shadow-xl p-8">
-        <h2 class="text-2xl font-semibold text-gray-900 mb-6">{{ $t('auth.registerTitle') }}</h2>
+      <div v-else class="bg-white rounded-2xl shadow-xl p-8">
+        <h2 class="text-2xl font-semibold text-gray-900 mb-6">{{ $t('auth.registerTitle', { systemName: systemConfig.system_name }) }}</h2>
 
         <form @submit.prevent="handleRegister" class="space-y-4">
           <!-- 用户名 -->
@@ -105,19 +133,22 @@
 
       <!-- 版权信息 -->
       <div class="mt-8 text-center text-sm text-gray-600">
-        <p>MinerU Tianshu v2.0 - 支持企业级认证授权</p>
+
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores'
+import { getSystemConfig, type SystemConfig } from '@/api'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const form = reactive({
   username: '',
@@ -127,6 +158,13 @@ const form = reactive({
 })
 
 const confirmPassword = ref('')
+const allowRegistration = ref(true) // 默认允许注册
+const systemConfig = ref<SystemConfig>({
+  system_name: 'MinerU Tianshu',
+  system_logo: '',
+  show_github_star: true,
+  allow_registration: true,
+})
 
 async function handleRegister() {
   if (confirmPassword.value !== form.password) {
@@ -139,4 +177,34 @@ async function handleRegister() {
     router.push('/login')
   }
 }
+
+/**
+ * Logo 加载失败处理
+ */
+function handleLogoError(event: Event) {
+  const target = event.target as HTMLImageElement
+  target.style.display = 'none'
+}
+
+/**
+ * 加载系统配置
+ */
+async function loadSystemConfig() {
+  try {
+    const response = await getSystemConfig()
+    systemConfig.value = response.config
+    allowRegistration.value = response.config.allow_registration !== false
+
+    // 更新页面标题
+    document.title = `${systemConfig.value.system_name} - 注册`
+  } catch (error) {
+    console.error('Failed to load system config:', error)
+    // 失败时使用默认配置
+    allowRegistration.value = true
+  }
+}
+
+onMounted(() => {
+  loadSystemConfig()
+})
 </script>

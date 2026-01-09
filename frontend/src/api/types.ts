@@ -228,3 +228,27 @@ export interface ApiResponse<T = any> {
   message?: string
   data?: T
 }
+
+// ==================== 系统配置类型 ====================
+
+// 系统配置
+export interface SystemConfig {
+  system_name: string
+  system_logo: string
+  show_github_star: boolean
+  allow_registration: boolean
+}
+
+// 系统配置响应
+export interface SystemConfigResponse {
+  success: boolean
+  config: SystemConfig
+}
+
+// 系统配置更新请求
+export interface SystemConfigUpdateRequest {
+  system_name?: string
+  system_logo?: string
+  show_github_star?: boolean
+  allow_registration?: boolean
+}

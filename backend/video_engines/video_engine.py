@@ -132,7 +132,9 @@ class VideoProcessingEngine:
             import uuid
             import os
 
-            output_dir = Path(os.getenv("OUTPUT_PATH", "/app/output"))
+            project_root = Path(__file__).parent.parent.parent
+            default_output = project_root / "data" / "output"
+            output_dir = Path(os.getenv("OUTPUT_PATH", str(default_output)))
             output_dir.mkdir(parents=True, exist_ok=True)
             output_path = output_dir / f"{uuid.uuid4().hex}_audio.{audio_format}"
 
