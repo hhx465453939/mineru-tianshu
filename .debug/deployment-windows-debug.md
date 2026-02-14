@@ -93,6 +93,17 @@
 - 代码变更: backend/start_all.py, backend/api_server.py, frontend/src/api/systemApi.ts, frontend/src/views/Dashboard.vue, frontend/src/locales/zh-CN.ts, frontend/src/locales/en-US.ts
 - 文档更新: docs/WINDOWS_DEPLOYMENT.md 模型下载说明中补充「前端展示」一条
 
+### 2025-02-15 将 hf_xet 加入 requirements
+- 问题描述: 日志提示 "Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download"
+- 解决方案: backend/requirements.txt 中将 huggingface-hub>=0.20.0 改为 huggingface-hub[hf_xet]>=0.20.0
+- 代码变更: backend/requirements.txt
+
+### 2025-02-15 根目录一键启动脚本
+- 问题描述: 用户要求在根目录写一键启动脚本，同时启动前后端
+- 解决方案: 新增 start.bat（Windows）、start.sh（Linux/Mac）。start.bat 用 start cmd /k 打开两个窗口分别运行 backend（激活 .venv 后 python start_all.py）与 frontend（npm run dev）；start.sh 后端后台、前端前台，Ctrl+C 时 trap 结束后端
+- 代码变更: 新增 start.bat、start.sh
+- 文档更新: docs/WINDOWS_DEPLOYMENT.md 方式三「访问与验证」下补充一键启动说明
+
 ## 待追踪问题
 - 无
 

@@ -529,7 +529,27 @@ npm run build
 
 在前端提交一个小 PDF 任务，选择 **pipeline（MinerU）** 引擎测试；若未装 PaddlePaddle，不要选 **paddleocr-vl** 引擎。
 
-### 8. 模型下载说明（方式三）
+**一键启动（方式三）**：在项目根目录双击 **start.bat**（或在该目录下执行 `start.bat`），会依次打开两个命令行窗口分别运行后端与前端，无需分别 cd 到 backend/frontend 再启动。
+
+### 8. 转换完成后的文档输出到哪里？
+
+解析完成后的 **Markdown / JSON / 图片** 会写在「输出目录」下，按任务分子目录存放。
+
+| 启动方式 | 输出目录（根） | 说明 |
+|----------|----------------|------|
+| **start.bat**（一键启动） | 项目根目录下 **`data\output`** | start.bat 已传 `--output-dir` 到项目内 data/output |
+| **手动 `python start_all.py`** | 默认 **`/tmp/mineru_tianshu_output`**（Windows 下多为 `C:\tmp\mineru_tianshu_output`） | 建议手动指定：`python start_all.py --output-dir ./data/output` |
+| **环境变量 OUTPUT_PATH** | 你设置的路径 | 若在 .env 或系统环境里设置了 `OUTPUT_PATH`，以该路径为准 |
+
+每个任务的结果在 **`{输出目录}/{文件名（无扩展名）}/`** 下，例如上传 `报告.pdf` 后会有：
+
+- `data/output/报告/result.md`（或 `content.md`）— 主 Markdown
+- `data/output/报告/result.json`（或 `content.json`）— 结构化 JSON
+- `data/output/报告/images/` — 提取的图片
+
+前端「任务详情」里的预览与下载，以及 API 返回的 `markdown_file` / 内容，都指向上述目录中的文件。
+
+### 9. 模型下载说明（方式三）
 
 **安装命令里不会下载模型**：`uv pip install` / `python -m pip install` 只安装 Python 包，**模型权重在首次使用对应功能时自动下载**。
 
@@ -544,7 +564,7 @@ npm run build
 - **可选预下载**：在 backend 目录执行 `python download_models.py --output ../models-offline` 可提前下载 MinerU、SenseVoice 等模型到指定目录，供离线或加速首次使用；详见 `backend/download_models.py` 帮助。
 - **前端展示**：登录后仪表盘会显示「模型状态」卡片与「首次使用提示」横幅（有模型未缓存时），提示首次使用将自动下载及预下载方式。
 
-### 9. 方式三的已知限制与建议
+### 10. 方式三的已知限制与建议
 
 | 项目 | 说明 |
 |------|------|

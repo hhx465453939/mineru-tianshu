@@ -297,6 +297,8 @@ make logs     # 查看日志
 
 **前置要求**：Node.js 18+、Python 3.8+、CUDA（可选）
 
+**一键启动**：在项目根目录执行 `start.bat`（Windows）或 `./start.sh`（Linux/Mac），可同时启动后端与前端，无需分别进入 backend/frontend 目录。
+
 **1. 安装依赖**
 
 ```bash

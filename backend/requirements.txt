@@ -119,7 +119,7 @@ biopython>=1.80  # Biological sequence parsing (optional but recommended)
 # ============================================================================
 ultralytics>=8.3.0            # YOLO11 framework for watermark detection
 simple-lama-inpainting>=0.1.0 # LaMa model for high-quality image inpainting
-huggingface-hub>=0.20.0       # Model download from HuggingFace
+huggingface-hub[hf_xet]>=0.20.0   # Model download from HuggingFace; hf_xet for Xet Storage (faster when repo uses it)
 
 # ============================================================================
 # Model Download & Management
