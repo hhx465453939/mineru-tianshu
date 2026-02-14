@@ -269,6 +269,8 @@ mineru-server/
 
 **前置要求**：Docker 20.10+、Docker Compose 2.0+、NVIDIA Container Toolkit（GPU 可选）
 
+> 📖 **Windows 本机部署**（含 RTX 3060 等显卡）：详见 [Windows 本地部署指南](docs/WINDOWS_DEPLOYMENT.md)，按步骤完成 Docker 或 WSL2 部署。
+
 ```bash
 # 一键部署
 make setup

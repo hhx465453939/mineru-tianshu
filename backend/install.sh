@@ -108,10 +108,10 @@ pip install "paddleocr[doc-parser]" \
     --retries 5
 echo "✓ Other packages installed"
 
-# Step 7.6: Ensure albumentations compatibility (MinerU 2.6.2 needs 1.3.x)
+# Step 7.6: Ensure albumentations compatibility (doclayout-yolo 0.0.4 requires >=1.4.11)
 echo ""
 echo "[Step 7.6/10] Ensuring albumentations compatibility..."
-pip install 'albumentations>=1.3.1,<1.4.0' 'albucore>=0.0.13,<0.0.17' \
+pip install 'albumentations>=1.4.11' 'albucore>=0.0.13' \
     -i https://pypi.tuna.tsinghua.edu.cn/simple \
     --default-timeout=300 \
     --retries 5

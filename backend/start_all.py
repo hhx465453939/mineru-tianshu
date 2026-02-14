@@ -284,13 +284,18 @@ class TianshuLauncher:
 
 def main():
     """主函数"""
-    env_path = Path(__file__).parent / ".env"
+    backend_dir = Path(__file__).parent
+    project_root = backend_dir.parent
+    # 优先 backend 目录，其次项目根目录（与部署文档中 copy .env 到根目录一致）
+    env_path = backend_dir / ".env"
+    if not env_path.exists():
+        env_path = project_root / ".env"
     if env_path.exists():
         load_dotenv(dotenv_path=env_path)
         logger.info(f"✅ Loaded .env from: {env_path}")
     else:
-        logger.error(f"❌ .env file not found at: {env_path}")
-        logger.error("Please create a .env file in the backend directory with required environment variables")
+        logger.error("❌ .env file not found.")
+        logger.error("Please create a .env file in the backend directory or project root (copy from .env.example).")
         sys.exit(1)
     parser = argparse.ArgumentParser(
         description="MinerU Tianshu - 统一启动脚本",

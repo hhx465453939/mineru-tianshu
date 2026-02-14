@@ -6,6 +6,24 @@
       <p class="mt-2 lg:mt-3 text-base lg:text-lg text-gray-600">{{ $t('dashboard.systemStatus') }}</p>
     </div>
 
+    <!-- 首次使用：模型下载提示 -->
+    <div
+      v-if="modelsStatus?.any_missing && !dismissModelTip"
+      class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+    >
+      <div class="flex items-start justify-between gap-3">
+        <p class="text-sm">{{ modelsStatus.first_use_tip }}</p>
+        <button
+          type="button"
+          aria-label="关闭"
+          class="shrink-0 rounded p-1 hover:bg-amber-200/50 dark:hover:bg-amber-800/50"
+          @click="dismissModelTip = true"
+        >
+          <XCircle class="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+
     <!-- 队列统计卡片 -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
       <StatCard
@@ -56,6 +74,29 @@
             {{ $t('queue.title') }}
           </router-link>
         </div>
+      </div>
+    </div>
+
+    <!-- 模型检测与状态 -->
+    <div class="mb-6 lg:mb-8">
+      <div class="card">
+        <h2 class="text-base lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4">{{ $t('dashboard.modelStatus') }}</h2>
+        <div v-if="modelsStatusLoading" class="py-4 text-center text-gray-500">
+          <LoadingSpinner :text="$t('common.loading')" />
+        </div>
+        <div v-else-if="modelsStatus?.models" class="space-y-2">
+          <div
+            v-for="(item, key) in modelsStatus.models"
+            :key="key"
+            class="flex items-center justify-between rounded border border-gray-200 bg-gray-50/50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50"
+          >
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ item.name }}</span>
+            <span class="text-sm" :class="item.ready ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'">
+              {{ item.message }}
+            </span>
+          </div>
+        </div>
+        <p v-else class="text-sm text-gray-500">{{ $t('common.noData') }}</p>
       </div>
     </div>
 
@@ -145,6 +186,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useTaskStore, useQueueStore } from '@/stores'
 import { formatRelativeTime } from '@/utils/format'
+import { getModelsStatus, type ModelsStatusResponse } from '@/api/systemApi'
 import StatCard from '@/components/StatCard.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
@@ -165,6 +207,10 @@ import {
 const taskStore = useTaskStore()
 const queueStore = useQueueStore()
 
+const modelsStatus = ref<ModelsStatusResponse | null>(null)
+const modelsStatusLoading = ref(true)
+const dismissModelTip = ref(false)
+
 // 计算最近的任务（最多显示10个）
 const recentTasks = computed(() => {
   return taskStore.tasks.slice(0, 10)
@@ -174,9 +220,20 @@ async function refreshTasks() {
   await taskStore.fetchTasks(undefined, 10)
 }
 
+async function loadModelsStatus() {
+  modelsStatusLoading.value = true
+  try {
+    const res = await getModelsStatus()
+    if (res.success) modelsStatus.value = res
+  } catch {
+    modelsStatus.value = null
+  } finally {
+    modelsStatusLoading.value = false
+  }
+}
+
 onMounted(async () => {
-  // 加载最近任务
   await refreshTasks()
-  // 队列统计由 AppLayout 自动刷新
+  await loadModelsStatus()
 })
 </script>

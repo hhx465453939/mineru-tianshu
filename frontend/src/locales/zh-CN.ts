@@ -80,6 +80,8 @@ export default {
     recentTasks: '最近任务',
     systemStatus: '系统状态',
     queueStats: '队列统计',
+    modelStatus: '模型状态',
+    firstUseTip: '首次使用提示',
   },
   task: {
     title: '任务',

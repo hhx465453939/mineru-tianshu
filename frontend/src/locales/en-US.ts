@@ -80,6 +80,8 @@ export default {
     recentTasks: 'Recent Tasks',
     systemStatus: 'System Status',
     queueStats: 'Queue Statistics',
+    modelStatus: 'Model Status',
+    firstUseTip: 'First-time tip',
   },
   task: {
     title: 'Task',

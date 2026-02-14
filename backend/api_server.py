@@ -736,6 +736,73 @@ async def list_engines():
     }
 
 
+def _check_model_cache_dir(path: Path, has_any_file: bool = True) -> bool:
+    """检查目录存在且（可选）非空。"""
+    if not path.exists() or not path.is_dir():
+        return False
+    if not has_any_file:
+        return True
+    try:
+        return any(path.iterdir())
+    except OSError:
+        return False
+
+
+@app.get("/api/v1/models/status", tags=["系统信息"])
+async def get_models_status():
+    """
+    模型就绪状态（用于前端展示与首次使用提示）
+
+    检测各引擎默认缓存目录是否有模型文件，便于用户了解是否需等待首次下载。
+    """
+    home = Path.home()
+    project_root = Path(__file__).parent.parent
+    status = {}
+
+    # MinerU：HuggingFace 或 ModelScope 缓存
+    hf_hub = home / ".cache" / "huggingface" / "hub"
+    ms_hub = home / ".cache" / "modelscope" / "hub"
+    mineru_ready = _check_model_cache_dir(hf_hub) or _check_model_cache_dir(ms_hub)
+    status["mineru"] = {
+        "ready": mineru_ready,
+        "name": "MinerU（PDF 解析）",
+        "cache_hint": "~/.cache/huggingface/hub 或 ~/.cache/modelscope/hub",
+        "message": "已缓存" if mineru_ready else "首次解析 PDF 时将自动下载",
+    }
+
+    # PaddleOCR-VL
+    paddle_models = home / ".paddleocr" / "models"
+    status["paddleocr"] = {
+        "ready": _check_model_cache_dir(paddle_models),
+        "name": "PaddleOCR-VL",
+        "cache_hint": "~/.paddleocr/models",
+        "message": "已缓存" if _check_model_cache_dir(paddle_models) else "首次使用该引擎时将自动下载（约 2GB）",
+    }
+
+    # SenseVoice：项目 models/sensevoice 或 ModelScope 缓存
+    sensevoice_local = project_root / "models" / "sensevoice"
+    ms_cache = home / ".cache" / "modelscope"
+    sensevoice_ready = _check_model_cache_dir(sensevoice_local) or _check_model_cache_dir(ms_cache)
+    status["sensevoice"] = {
+        "ready": sensevoice_ready,
+        "name": "SenseVoice（音频）",
+        "cache_hint": "项目 models/sensevoice 或 ~/.cache/modelscope",
+        "message": "已缓存" if sensevoice_ready else "首次提交音频任务时将自动下载",
+    }
+
+    any_ready = any(s["ready"] for s in status.values())
+    any_missing = not all(s["ready"] for s in status.values())
+
+    return {
+        "success": True,
+        "models": status,
+        "any_ready": any_ready,
+        "any_missing": any_missing,
+        "first_use_tip": "部分模型将在首次使用时自动下载，请保持网络畅通。可在后端执行 python download_models.py --output ../models-offline 预下载。",
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
 @app.get("/api/v1/health", tags=["系统信息"])
 async def health_check():
     """
