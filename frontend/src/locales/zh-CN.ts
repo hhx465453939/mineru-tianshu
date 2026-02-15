@@ -102,6 +102,7 @@ export default {
     downloadResult: '下载结果',
     downloadMarkdown: '下载 Markdown',
     downloadJson: '下载 JSON',
+    batchDownloadCompleted: '批量下载成功任务',
     submitTask: '提交任务',
     taskList: '任务列表',
     taskDetail: '任务详情',

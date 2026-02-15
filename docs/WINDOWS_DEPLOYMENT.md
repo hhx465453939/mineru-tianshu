@@ -529,7 +529,7 @@ npm run build
 
 在前端提交一个小 PDF 任务，选择 **pipeline（MinerU）** 引擎测试；若未装 PaddlePaddle，不要选 **paddleocr-vl** 引擎。
 
-**一键启动（方式三）**：在项目根目录双击 **start.bat**（或在该目录下执行 `start.bat`），会依次打开两个命令行窗口分别运行后端与前端，无需分别 cd 到 backend/frontend 再启动。
+**一键启动（方式三）**：在项目根目录执行 `python start_dev.py`，会同时启动后端与前端，无需分别 cd 到 backend/frontend 再启动。
 
 ### 8. 转换完成后的文档输出到哪里？
 
@@ -537,7 +537,7 @@ npm run build
 
 | 启动方式 | 输出目录（根） | 说明 |
 |----------|----------------|------|
-| **start.bat**（一键启动） | 项目根目录下 **`data\output`** | start.bat 已传 `--output-dir` 到项目内 data/output |
+| **start_dev.py**（一键启动） | 项目根目录下 **`data\output`** | 脚本已传 `--output-dir` 到项目内 data/output |
 | **手动 `python start_all.py`** | 默认 **`/tmp/mineru_tianshu_output`**（Windows 下多为 `C:\tmp\mineru_tianshu_output`） | 建议手动指定：`python start_all.py --output-dir ./data/output` |
 | **环境变量 OUTPUT_PATH** | 你设置的路径 | 若在 .env 或系统环境里设置了 `OUTPUT_PATH`，以该路径为准 |
 

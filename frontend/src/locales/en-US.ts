@@ -102,6 +102,7 @@ export default {
     downloadResult: 'Download Result',
     downloadMarkdown: 'Download Markdown',
     downloadJson: 'Download JSON',
+    batchDownloadCompleted: 'Batch Download Completed',
     submitTask: 'Submit Task',
     taskList: 'Task List',
     taskDetail: 'Task Detail',

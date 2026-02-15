@@ -99,6 +99,7 @@
                 <input
                   v-model="selectAll"
                   @change="toggleSelectAll"
+                  :disabled="selectableTaskIdsOnPage.length === 0"
                   type="checkbox"
                   class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                 />
@@ -134,8 +135,9 @@
                 <input
                   v-model="selectedTasks"
                   :value="task.task_id"
+                  :disabled="task.status !== 'completed'"
                   type="checkbox"
-                  class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 disabled:opacity-40 disabled:cursor-not-allowed"
                 />
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
@@ -186,16 +188,17 @@
       <div v-if="filteredTasks.length > 0" class="mt-4 flex items-center justify-between">
         <!-- 批量操作 -->
         <div class="flex items-center gap-2">
-          <span v-if="selectedTasks.length > 0" class="text-sm text-gray-600">
-            {{ $t('common.selected') }}: {{ selectedTasks.length }}
+          <span v-if="selectedCompletedTasks.length > 0" class="text-sm text-gray-600">
+            {{ $t('common.selected') }}: {{ selectedCompletedTasks.length }}
           </span>
           <button
-            v-if="selectedTasks.length > 0"
-            @click="batchCancel"
-            class="btn btn-secondary btn-sm flex items-center"
+            v-if="selectedCompletedTasks.length > 0"
+            @click="batchDownloadResults"
+            :disabled="downloading"
+            class="btn btn-primary btn-sm flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <X class="w-4 h-4 mr-1" />
-            {{ $t('common.cancel') }}
+            <Download class="w-4 h-4 mr-1" />
+            {{ downloading ? $t('common.loading') : $t('task.batchDownloadCompleted') }}
           </button>
         </div>
 
@@ -236,6 +239,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useTaskStore } from '@/stores'
 import { formatRelativeTime, formatBackendName } from '@/utils/format'
+import { taskApi } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -246,6 +250,7 @@ import {
   FileText,
   Eye,
   X,
+  Download,
   FileQuestion,
   ChevronLeft,
   ChevronRight,
@@ -300,12 +305,24 @@ const paginatedTasks = computed(() => {
 // 选择
 const selectedTasks = ref<string[]>([])
 const selectAll = ref(false)
+const downloading = ref(false)
+const selectedCompletedTasks = computed(() =>
+  selectedTasks.value.filter(id => tasks.value.find(task => task.task_id === id)?.status === 'completed')
+)
+const selectableTaskIdsOnPage = computed(() =>
+  paginatedTasks.value
+    .filter(task => task.status === 'completed')
+    .map(task => task.task_id)
+)
 
 function toggleSelectAll() {
   if (selectAll.value) {
-    selectedTasks.value = paginatedTasks.value.map(t => t.task_id)
+    const selectedSet = new Set(selectedTasks.value)
+    selectableTaskIdsOnPage.value.forEach(id => selectedSet.add(id))
+    selectedTasks.value = Array.from(selectedSet)
   } else {
-    selectedTasks.value = []
+    const selectableSet = new Set(selectableTaskIdsOnPage.value)
+    selectedTasks.value = selectedTasks.value.filter(id => !selectableSet.has(id))
   }
 }
 
@@ -320,20 +337,68 @@ async function cancelTask(taskId: string) {
   showCancelDialog.value = true
 }
 
-async function batchCancel() {
-  const pendingTasks = selectedTasks.value.filter(id => {
-    const task = tasks.value.find(t => t.task_id === id)
-    return task?.status === 'pending'
-  })
+function sanitizeFileName(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, '_')
+}
 
-  if (pendingTasks.length === 0) {
-    alert('没有可以取消的任务（只能取消等待中的任务）')
+function downloadTextFile(content: string, fileName: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+async function batchDownloadResults() {
+  const taskIds = [...selectedCompletedTasks.value]
+
+  if (taskIds.length === 0) {
+    alert('请先勾选成功任务')
     return
   }
 
-  taskToCancel.value = pendingTasks
-  cancelDialogMessage.value = `确定要取消这 ${pendingTasks.length} 个任务吗？`
-  showCancelDialog.value = true
+  downloading.value = true
+  const failedTasks: string[] = []
+  let downloadedTaskCount = 0
+
+  for (const taskId of taskIds) {
+    try {
+      const taskStatus = await taskApi.getTaskStatus(taskId, false, 'both')
+      if (taskStatus.status !== 'completed' || !taskStatus.data?.content) {
+        failedTasks.push(taskStatus.file_name || taskId)
+        continue
+      }
+
+      const baseName = sanitizeFileName(taskStatus.file_name.replace(/\.[^/.]+$/, '') || taskId)
+      downloadTextFile(taskStatus.data.content, `${baseName}_${taskId}.md`, 'text/markdown;charset=utf-8')
+
+      if (taskStatus.data.json_content !== undefined) {
+        downloadTextFile(
+          JSON.stringify(taskStatus.data.json_content, null, 2),
+          `${baseName}_${taskId}.json`,
+          'application/json;charset=utf-8'
+        )
+      }
+
+      downloadedTaskCount += 1
+    } catch (error) {
+      console.error(`Failed to download task ${taskId}:`, error)
+      failedTasks.push(taskId)
+    }
+  }
+
+  selectedTasks.value = []
+  selectAll.value = false
+  downloading.value = false
+
+  if (failedTasks.length === 0) {
+    alert(`已完成下载 ${downloadedTaskCount} 个任务结果`)
+    return
+  }
+
+  alert(`已下载 ${downloadedTaskCount} 个任务；失败 ${failedTasks.length} 个`)
 }
 
 async function confirmCancel() {
@@ -366,8 +431,19 @@ async function refreshTasks() {
 }
 
 // 监听筛选后的任务变化,重置选择状态
-watch(paginatedTasks, () => {
-  selectAll.value = false
+watch([paginatedTasks, selectedTasks], () => {
+  if (selectableTaskIdsOnPage.value.length === 0) {
+    selectAll.value = false
+    return
+  }
+
+  const selectedSet = new Set(selectedTasks.value)
+  selectAll.value = selectableTaskIdsOnPage.value.every(id => selectedSet.has(id))
+})
+
+watch(tasks, () => {
+  const completedTaskIds = new Set(tasks.value.filter(task => task.status === 'completed').map(task => task.task_id))
+  selectedTasks.value = selectedTasks.value.filter(id => completedTaskIds.has(id))
 })
 
 onMounted(async () => {
