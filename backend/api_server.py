@@ -59,6 +59,9 @@ PROJECT_ROOT = Path(__file__).parent.parent
 # 初始化数据库
 # 确保使用环境变量中的数据库路径（与 Worker 保持一致）
 db_path_env = os.getenv("DATABASE_PATH")
+# Windows 本地：.env 中常见的 Docker 路径 /app/data/db/... 会解析为 E:\app\...，目录往往不存在
+if db_path_env and os.name == "nt" and db_path_env.replace("\\", "/").strip().startswith("/app/"):
+    db_path_env = None
 if db_path_env:
     db_path = str(Path(db_path_env).resolve())
     logger.info(f"📊 API Server using DATABASE_PATH: {db_path_env} -> {db_path}")
@@ -210,8 +213,7 @@ async def submit_task(
     watermark_dilation: int = Form(10, description="水印掩码膨胀大小（像素，推荐 10）"),
     # Office 文件转 PDF 参数
     convert_office_to_pdf: bool = Form(
-        False,
-        description="是否将 Office 文件转换为 PDF 后再处理（图片提取更完整，但速度较慢）"
+        False, description="是否将 Office 文件转换为 PDF 后再处理（图片提取更完整，但速度较慢）"
     ),
     # 认证依赖
     current_user: User = Depends(require_permission(Permission.TASK_SUBMIT)),
@@ -659,7 +661,7 @@ async def list_engines():
                 "description": "Office 文档和文本文件转换引擎（快速但图片提取可能不完整）",
                 "supported_formats": [".docx", ".xlsx", ".pptx", ".doc", ".xls", ".ppt", ".html", ".txt", ".csv"],
                 "features": ["文本提取", "基础格式保留", "图片提取（DOCX）"],
-                "note": "推荐启用 convert_office_to_pdf 参数以获得更好的图片提取效果"
+                "note": "推荐启用 convert_office_to_pdf 参数以获得更好的图片提取效果",
             },
             {
                 "name": "LibreOffice + MinerU (完整)",
@@ -667,8 +669,8 @@ async def list_engines():
                 "description": "将 Office 文件转为 PDF 后使用 MinerU 处理（慢但图片提取完整）",
                 "supported_formats": [".docx", ".xlsx", ".pptx", ".doc", ".xls", ".ppt"],
                 "features": ["完整格式保留", "完整图片提取", "表格识别", "公式识别"],
-                "requirement": "需要设置 convert_office_to_pdf=true"
-            }
+                "requirement": "需要设置 convert_office_to_pdf=true",
+            },
         ],
     }
 

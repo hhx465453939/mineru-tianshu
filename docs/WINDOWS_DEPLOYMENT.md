@@ -67,7 +67,7 @@ Docker 方式在 Windows 上通过 Docker Desktop（WSL2 后端）运行 Linux �
    ```
    若为 ZIP 解压，则进入解压后的项目根目录，例如：
    ```powershell
-   cd D:\development\mineru-tianshu
+   cd E:\development\mineru-tianshu
    ```
 
 ### 4. 准备环境变量文件
@@ -159,7 +159,7 @@ docker compose up -d
 
 ### 2. 在 WSL 中进入项目目录
 
-若项目在 Windows 盘符下（例如 `D:\development\mineru-tianshu`），在 WSL 中一般对应：
+若项目在 Windows 盘符下（例如 `E:\development\mineru-tianshu`），在 WSL 中一般对应：
 
 ```bash
 cd /mnt/d/development/mineru-tianshu
@@ -367,7 +367,8 @@ cd mineru-tianshu
 copy .env.example .env
 ```
 
-（可选）用记事本或 VS Code 编辑 `.env`，修改 `JWT_SECRET_KEY` 等；单卡 3060 可保持默认 `GPU_COUNT=1`、`CUDA_VISIBLE_DEVICES=0`。
+（可选）用记事本或 VS Code 编辑 `.env`，修改 `JWT_SECRET_KEY` 等；单卡 3060 可保持默认 `GPU_COUNT=1`、`CUDA_VISIBLE_DEVICES=0`。  
+**说明**：`.env.example` 中的 `DATABASE_PATH=/app/data/db/mineru_tianshu.db` 是 Docker 用的路径。在 Windows 本机运行时，程序会自动识别并改用项目下的 `data\db\mineru_tianshu.db`，无需修改该项。
 
 **3.2 创建所需目录**
 
@@ -386,7 +387,7 @@ if (!(Test-Path logs\mcp)) { New-Item -ItemType Directory -Path logs\mcp -Force 
 **4.1 进入 backend 目录并创建虚拟环境**
 
 ```powershell
-cd D:\development\mineru-tianshu\backend
+cd E:\development\mineru-tianshu\backend
 uv venv --python 3.12
 ```
 
@@ -501,7 +502,7 @@ python start_all.py --workers-per-device 1
 **新开一个 PowerShell 窗口**，进入前端目录并安装依赖：
 
 ```powershell
-cd D:\development\mineru-tianshu\frontend
+cd E:\development\mineru-tianshu\frontend
 npm install
 ```
 
@@ -557,7 +558,7 @@ npm run build
 |-------------|----------|------------------------|
 | **MinerU（PDF 解析）** | 首次用 pipeline 解析 PDF 时 | `%USERPROFILE%\.cache\huggingface\hub\` 或 `%USERPROFILE%\.cache\modelscope\`（由环境变量 `MODEL_DOWNLOAD_SOURCE` / `MINERU_MODEL_SOURCE` 决定） |
 | **PaddleOCR-VL** | 首次用 paddleocr-vl 引擎时 | `%USERPROFILE%\.paddleocr\models\`（约 2GB，由 PaddleOCR 自动管理） |
-| **SenseVoice（音频）** | 首次提交音频转写任务时 | 项目目录下 `models\sensevoice\`（如 `D:\development\mineru-tianshu\models\sensevoice`）或 ModelScope 缓存 |
+| **SenseVoice（音频）** | 首次提交音频转写任务时 | 项目目录下 `models\sensevoice\`（如 `E:\development\mineru-tianshu\models\sensevoice`）或 ModelScope 缓存 |
 | **水印检测（YOLO11）** | 首次使用水印去除时 | `%USERPROFILE%\.cache\watermark_models\` |
 
 - 首次使用某功能时请保持网络畅通；国内建议在 `.env` 中设置 `MODEL_DOWNLOAD_SOURCE=modelscope` 或 `HF_ENDPOINT=https://hf-mirror.com` 以加速。
@@ -691,14 +692,14 @@ docker compose down --rmi all
 在项目根目录执行：
 
 ```powershell
-cd D:\development\mineru-tianshu\backend
+cd E:\development\mineru-tianshu\backend
 .\.venv\Scripts\python.exe -m pip install pyinstaller
 ```
 
 ### 3) 打包方式 A（推荐，单文件 onefile）
 
 ```powershell
-cd D:\development\mineru-tianshu
+cd E:\development\mineru-tianshu
 .\backend\.venv\Scripts\pyinstaller.exe --noconfirm --clean --onefile --console --name TianshuLauncher start_dev.py
 ```
 
@@ -709,7 +710,7 @@ cd D:\development\mineru-tianshu
 ### 4) 打包方式 B（目录模式 onedir，调试更方便）
 
 ```powershell
-cd D:\development\mineru-tianshu
+cd E:\development\mineru-tianshu
 .\backend\.venv\Scripts\pyinstaller.exe --noconfirm --clean --onedir --console --name TianshuLauncher start_dev.py
 ```
 

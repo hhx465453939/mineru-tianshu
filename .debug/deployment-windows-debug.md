@@ -104,6 +104,14 @@
 - 代码变更: 新增 start.bat、start.sh
 - 文档更新: docs/WINDOWS_DEPLOYMENT.md 方式三「访问与验证」下补充一键启动说明
 
+### 2026-02-15 Windows 下 DATABASE_PATH 导致 unable to open database file
+- 问题描述: 本机 Windows 运行 `python start_dev.py` 时 API Server 报错 `sqlite3.OperationalError: unable to open database file`；日志显示 `DATABASE_PATH: /app/data/db/mineru_tianshu.db -> E:\app\data\db\mineru_tianshu.db`
+- 根因: .env 中 `DATABASE_PATH=/app/data/db/mineru_tianshu.db` 为 Docker 路径；在 Windows 上 `Path("/app/...").resolve()` 解析为当前盘符下的 `E:\app\...`，该目录往往不存在或不可写
+- 解决方案: 在 backend 中当检测到 Windows 且 DATABASE_PATH 为 Docker 风格路径（以 `/app/` 开头）时，自动忽略该环境变量，改用项目相对默认路径 `项目根/data/db/mineru_tianshu.db`
+- 代码变更: backend/api_server.py, backend/task_db.py, backend/auth/auth_db.py, backend/auth/system_config.py, backend/litserve_worker.py（均在读取 DATABASE_PATH 后增加 `os.name == "nt"` 与 `/app/` 前缀判断，若成立则使用默认路径）
+- 验证结果: ruff check / ruff format 通过
+- 文档更新: docs/WINDOWS_DEPLOYMENT.md 方式三「3.1 复制环境变量文件」下补充 DATABASE_PATH 说明
+
 ## 待追踪问题
 - 无
 

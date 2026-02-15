@@ -37,6 +37,9 @@ class AuthDB:
             project_root = Path(__file__).parent.parent.parent
             default_db = project_root / "data" / "db" / "mineru_tianshu.db"
             db_path = os.getenv("DATABASE_PATH", str(default_db))
+            # Windows 本地：.env 中 Docker 路径 /app/... 会解析为 E:\app\...，目录往往不存在
+            if os.name == "nt" and db_path.replace("\\", "/").strip().startswith("/app/"):
+                db_path = str(default_db)
             # 确保父目录存在
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
             # 确保使用绝对路径

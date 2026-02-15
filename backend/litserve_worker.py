@@ -327,6 +327,9 @@ class MinerUWorkerAPI(ls.LitAPI):
 
         # 初始化任务数据库（从环境变量读取，兼容 Docker 和本地）
         db_path_env = os.getenv("DATABASE_PATH")
+        # Windows 本地：.env 中 Docker 路径 /app/... 会解析为 E:\app\...，目录往往不存在
+        if db_path_env and os.name == "nt" and db_path_env.replace("\\", "/").strip().startswith("/app/"):
+            db_path_env = None
         if db_path_env:
             db_path = Path(db_path_env).resolve()  # 使用 resolve() 转换为绝对路径
             logger.info(f"📊 Using DATABASE_PATH from environment: {db_path_env} -> {db_path}")

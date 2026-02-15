@@ -45,6 +45,9 @@ class TaskDB:
             project_root = Path(__file__).parent.parent
             default_db = project_root / "data" / "db" / "mineru_tianshu.db"
             db_path = os.getenv("DATABASE_PATH", str(default_db))
+            # Windows 本地：.env 中 Docker 路径 /app/... 会解析为 E:\app\...，目录往往不存在
+            if os.name == "nt" and db_path.replace("\\", "/").strip().startswith("/app/"):
+                db_path = str(default_db)
             # 确保父目录存在
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
             # 确保使用绝对路径
@@ -483,7 +486,7 @@ class TaskDB:
             if not success and status in ["completed", "failed"]:
                 from loguru import logger
 
-                logger.debug(f"Status update failed: task_id={task_id}, status={status}, " f"worker_id={worker_id}")
+                logger.debug(f"Status update failed: task_id={task_id}, status={status}, worker_id={worker_id}")
 
             # 通知 Redis 任务完成/失败（清理 processing set）
             if success and status in ["completed", "failed"]:
