@@ -13,7 +13,14 @@ import time
 from pathlib import Path
 
 
-ROOT_DIR = Path(__file__).resolve().parent
+def get_root_dir() -> Path:
+    # PyInstaller onefile/onedir mode: use executable directory as project root.
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+ROOT_DIR = get_root_dir()
 BACKEND_DIR = ROOT_DIR / "backend"
 FRONTEND_DIR = ROOT_DIR / "frontend"
 

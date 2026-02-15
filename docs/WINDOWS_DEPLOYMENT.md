@@ -676,4 +676,54 @@ docker compose down --rmi all
 
 ---
 
+## 九、Windows 启动器（.exe）打包说明
+
+如果你希望把一键启动脚本 `start_dev.py` 打包成双击可运行的 `Launcher.exe`，可按下面步骤操作。
+
+### 1) 前置条件
+
+- 项目目录结构保持不变（`backend/`、`frontend/`、`.env` 等都在项目根目录）
+- 后端与前端依赖已安装完成（至少能用 `python start_dev.py` 正常启动）
+- 推荐在 `backend/.venv` 中安装打包工具
+
+### 2) 安装 PyInstaller
+
+在项目根目录执行：
+
+```powershell
+cd D:\development\mineru-tianshu\backend
+.\.venv\Scripts\python.exe -m pip install pyinstaller
+```
+
+### 3) 打包方式 A（推荐，单文件 onefile）
+
+```powershell
+cd D:\development\mineru-tianshu
+.\backend\.venv\Scripts\pyinstaller.exe --noconfirm --clean --onefile --console --name TianshuLauncher start_dev.py
+```
+
+打包结果：
+
+- `dist\TianshuLauncher.exe`
+
+### 4) 打包方式 B（目录模式 onedir，调试更方便）
+
+```powershell
+cd D:\development\mineru-tianshu
+.\backend\.venv\Scripts\pyinstaller.exe --noconfirm --clean --onedir --console --name TianshuLauncher start_dev.py
+```
+
+打包结果：
+
+- `dist\TianshuLauncher\TianshuLauncher.exe`
+
+### 5) 使用与发布注意事项
+
+- 必须把 `TianshuLauncher.exe` 放在**项目根目录**运行（与 `backend/`、`frontend/` 同级）。
+- 该启动器只是把 `start_dev.py` 变成 `.exe`，不会把 Python、Node、模型和项目代码全部打进一个独立安装包。
+- 双击后会启动后端与前端开发服务；关闭启动器窗口会联动结束子进程。
+- 若你要对外分发“开箱即用安装包”，建议改为 Inno Setup / NSIS 打包“完整目录 + 运行时依赖”，而不只是 PyInstaller 单文件。
+
+---
+
 *文档版本：2025-02-14；已含方式三 Windows 源码部署（uv + venv + npm），适用于本机 Windows + RTX 3060。*
