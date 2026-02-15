@@ -11,6 +11,8 @@ MinerU Tianshu - API Server
 import json
 import os
 import re
+import subprocess
+import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -748,6 +750,118 @@ def _check_model_cache_dir(path: Path, has_any_file: bool = True) -> bool:
         return False
 
 
+MODEL_PRELOAD_STATE = {
+    "running": False,
+    "started_at": None,
+    "finished_at": None,
+    "success": None,
+    "return_code": None,
+    "error": None,
+    "output_dir": None,
+    "logs": [],
+}
+_model_preload_lock = threading.Lock()
+
+
+def _model_catalog():
+    return [
+        {
+            "key": "mineru",
+            "name": "MinerU PDF-Extract-Kit",
+            "required": True,
+            "auto_download": False,
+            "description": "PDF OCR and layout analysis models",
+        },
+        {
+            "key": "paddleocr",
+            "name": "PaddleOCR Multi-language Models",
+            "required": False,
+            "auto_download": True,
+            "description": "Will be downloaded automatically on first run (~2GB)",
+        },
+        {
+            "key": "sensevoice",
+            "name": "SenseVoice Audio Recognition",
+            "required": True,
+            "auto_download": False,
+            "description": "Multi-language speech recognition model",
+        },
+        {
+            "key": "paraformer",
+            "name": "Paraformer Speaker Diarization",
+            "required": False,
+            "auto_download": False,
+            "description": "Speaker diarization and VAD model",
+        },
+        {
+            "key": "yolo11",
+            "name": "YOLO11x Watermark Detection",
+            "required": False,
+            "auto_download": False,
+            "description": "Watermark detection model for document processing",
+        },
+        {
+            "key": "lama",
+            "name": "LaMa Watermark Inpainting",
+            "required": False,
+            "auto_download": True,
+            "description": "Will be downloaded by simple_lama_inpainting on first use",
+        },
+    ]
+
+
+def _append_model_preload_log(line: str):
+    with _model_preload_lock:
+        MODEL_PRELOAD_STATE["logs"].append(line.rstrip())
+        # Keep only recent lines to avoid memory growth.
+        if len(MODEL_PRELOAD_STATE["logs"]) > 300:
+            MODEL_PRELOAD_STATE["logs"] = MODEL_PRELOAD_STATE["logs"][-300:]
+
+
+def _run_model_preload(output_dir: str, selected_models: Optional[str], force: bool):
+    backend_dir = Path(__file__).parent
+    script_path = backend_dir / "download_models.py"
+    command = [os.sys.executable, str(script_path), "--output", output_dir]
+    if selected_models:
+        command.extend(["--models", selected_models])
+    if force:
+        command.append("--force")
+
+    _append_model_preload_log(f"Command: {' '.join(command)}")
+
+    process = subprocess.Popen(
+        command,
+        cwd=backend_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    try:
+        if process.stdout:
+            for line in process.stdout:
+                _append_model_preload_log(line)
+        process.wait()
+    except Exception as e:
+        with _model_preload_lock:
+            MODEL_PRELOAD_STATE["running"] = False
+            MODEL_PRELOAD_STATE["finished_at"] = datetime.now().isoformat()
+            MODEL_PRELOAD_STATE["success"] = False
+            MODEL_PRELOAD_STATE["return_code"] = None
+            MODEL_PRELOAD_STATE["error"] = str(e)
+        return
+
+    with _model_preload_lock:
+        MODEL_PRELOAD_STATE["running"] = False
+        MODEL_PRELOAD_STATE["finished_at"] = datetime.now().isoformat()
+        MODEL_PRELOAD_STATE["success"] = process.returncode == 0
+        MODEL_PRELOAD_STATE["return_code"] = process.returncode
+        if process.returncode != 0:
+            MODEL_PRELOAD_STATE["error"] = f"download_models.py exited with code {process.returncode}"
+
+
 @app.get("/api/v1/models/status", tags=["系统信息"])
 async def get_models_status():
     """
@@ -796,11 +910,65 @@ async def get_models_status():
     return {
         "success": True,
         "models": status,
+        "catalog": _model_catalog(),
         "any_ready": any_ready,
         "any_missing": any_missing,
-        "first_use_tip": "部分模型将在首次使用时自动下载，请保持网络畅通。可在后端执行 python download_models.py --output ../models-offline 预下载。",
+        "first_use_tip": "部分模型将在首次使用时自动下载，请保持网络畅通。预下载命令：cd backend && python download_models.py --output ../models-offline；或在项目根目录执行 python backend/download_models.py --output ./models-offline。",
         "timestamp": datetime.now().isoformat(),
     }
+
+
+@app.post("/api/v1/models/preload/start", tags=["系统信息"])
+async def start_model_preload(
+    output_dir: Optional[str] = Query(None, description="模型输出目录"),
+    models: Optional[str] = Query(None, description="逗号分隔模型列表，如 mineru,sensevoice"),
+    force: bool = Query(False, description="是否强制重新下载"),
+    current_user: User = Depends(require_permission(Permission.QUEUE_MANAGE)),
+):
+    """启动模型预下载任务（后台执行）。"""
+    with _model_preload_lock:
+        if MODEL_PRELOAD_STATE["running"]:
+            raise HTTPException(status_code=409, detail="Model preload is already running")
+
+        project_root = Path(__file__).parent.parent
+        target_dir = output_dir or str((project_root / "models-offline").resolve())
+        MODEL_PRELOAD_STATE["running"] = True
+        MODEL_PRELOAD_STATE["started_at"] = datetime.now().isoformat()
+        MODEL_PRELOAD_STATE["finished_at"] = None
+        MODEL_PRELOAD_STATE["success"] = None
+        MODEL_PRELOAD_STATE["return_code"] = None
+        MODEL_PRELOAD_STATE["error"] = None
+        MODEL_PRELOAD_STATE["output_dir"] = target_dir
+        MODEL_PRELOAD_STATE["logs"] = [f"Started by {current_user.username}"]
+
+    thread = threading.Thread(target=_run_model_preload, args=(target_dir, models, force), daemon=True)
+    thread.start()
+
+    return {
+        "success": True,
+        "message": "Model preload started",
+        "output_dir": target_dir,
+        "models": models,
+        "force": force,
+        "started_at": MODEL_PRELOAD_STATE["started_at"],
+    }
+
+
+@app.get("/api/v1/models/preload/status", tags=["系统信息"])
+async def get_model_preload_status(current_user: User = Depends(get_current_active_user)):
+    """获取模型预下载任务状态。"""
+    with _model_preload_lock:
+        return {
+            "success": True,
+            "running": MODEL_PRELOAD_STATE["running"],
+            "started_at": MODEL_PRELOAD_STATE["started_at"],
+            "finished_at": MODEL_PRELOAD_STATE["finished_at"],
+            "success_flag": MODEL_PRELOAD_STATE["success"],
+            "return_code": MODEL_PRELOAD_STATE["return_code"],
+            "error": MODEL_PRELOAD_STATE["error"],
+            "output_dir": MODEL_PRELOAD_STATE["output_dir"],
+            "logs": MODEL_PRELOAD_STATE["logs"],
+        }
 
 
 @app.get("/api/v1/health", tags=["系统信息"])

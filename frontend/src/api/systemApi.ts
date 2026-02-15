@@ -20,10 +20,38 @@ export interface ModelStatusItem {
 export interface ModelsStatusResponse {
   success: boolean
   models: Record<string, ModelStatusItem>
+  catalog: Array<{
+    key: string
+    name: string
+    required: boolean
+    auto_download: boolean
+    description: string
+  }>
   any_ready: boolean
   any_missing: boolean
   first_use_tip: string
   timestamp: string
+}
+
+export interface ModelPreloadStartResponse {
+  success: boolean
+  message: string
+  output_dir: string
+  models?: string
+  force: boolean
+  started_at: string
+}
+
+export interface ModelPreloadStatusResponse {
+  success: boolean
+  running: boolean
+  started_at: string | null
+  finished_at: string | null
+  success_flag: boolean | null
+  return_code: number | null
+  error: string | null
+  output_dir: string | null
+  logs: string[]
 }
 
 /**
@@ -31,6 +59,32 @@ export interface ModelsStatusResponse {
  */
 export async function getModelsStatus(): Promise<ModelsStatusResponse> {
   const response = await apiClient.get<ModelsStatusResponse>('/api/v1/models/status')
+  return response.data
+}
+
+/**
+ * 启动模型预下载（后台任务）
+ */
+export async function startModelPreload(
+  outputDir?: string,
+  models?: string,
+  force: boolean = false
+): Promise<ModelPreloadStartResponse> {
+  const response = await apiClient.post<ModelPreloadStartResponse>('/api/v1/models/preload/start', null, {
+    params: {
+      output_dir: outputDir,
+      models,
+      force,
+    },
+  })
+  return response.data
+}
+
+/**
+ * 获取模型预下载状态
+ */
+export async function getModelPreloadStatus(): Promise<ModelPreloadStatusResponse> {
+  const response = await apiClient.get<ModelPreloadStatusResponse>('/api/v1/models/preload/status')
   return response.data
 }
 

@@ -82,6 +82,11 @@ export default {
     queueStats: '队列统计',
     modelStatus: '模型状态',
     firstUseTip: '首次使用提示',
+    preloadModels: '一键预下载模型',
+    modelPreloading: '模型预下载进行中...',
+    modelPreloadSuccess: '模型预下载完成',
+    modelPreloadFailed: '模型预下载失败，请查看后端日志',
+    modelCatalog: '模型清单',
   },
   task: {
     title: '任务',

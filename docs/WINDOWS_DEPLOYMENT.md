@@ -561,7 +561,10 @@ npm run build
 | **水印检测（YOLO11）** | 首次使用水印去除时 | `%USERPROFILE%\.cache\watermark_models\` |
 
 - 首次使用某功能时请保持网络畅通；国内建议在 `.env` 中设置 `MODEL_DOWNLOAD_SOURCE=modelscope` 或 `HF_ENDPOINT=https://hf-mirror.com` 以加速。
-- **可选预下载**：在 backend 目录执行 `python download_models.py --output ../models-offline` 可提前下载 MinerU、SenseVoice 等模型到指定目录，供离线或加速首次使用；详见 `backend/download_models.py` 帮助。
+- **可选预下载**：两种写法都可以：  
+  1) 在项目根目录执行 `python backend/download_models.py --output ./models-offline`  
+  2) 先进入 backend 目录再执行 `python download_models.py --output ../models-offline`  
+  可提前下载 MinerU、SenseVoice 等模型到指定目录，供离线或加速首次使用；详见 `backend/download_models.py` 帮助。
 - **前端展示**：登录后仪表盘会显示「模型状态」卡片与「首次使用提示」横幅（有模型未缓存时），提示首次使用将自动下载及预下载方式。
 
 ### 10. 方式三的已知限制与建议

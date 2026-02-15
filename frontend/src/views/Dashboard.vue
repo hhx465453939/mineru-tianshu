@@ -80,7 +80,27 @@
     <!-- 模型检测与状态 -->
     <div class="mb-6 lg:mb-8">
       <div class="card">
-        <h2 class="text-base lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4">{{ $t('dashboard.modelStatus') }}</h2>
+        <div class="mb-3 flex items-center justify-between gap-3 lg:mb-4">
+          <h2 class="text-base lg:text-lg font-semibold text-gray-900">{{ $t('dashboard.modelStatus') }}</h2>
+          <button
+            v-if="authStore.isManager"
+            @click="triggerModelPreload"
+            :disabled="preloadStarting || preloadStatus?.running"
+            class="btn btn-secondary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {{ preloadStarting || preloadStatus?.running ? $t('dashboard.modelPreloading') : $t('dashboard.preloadModels') }}
+          </button>
+        </div>
+        <p v-if="modelsStatus?.catalog?.length" class="mb-3 text-xs text-gray-500">
+          {{ $t('dashboard.modelCatalog') }}:
+          {{ modelsStatus.catalog.map(item => `${item.name}${item.required ? ' (required)' : ''}`).join('，') }}
+        </p>
+        <div v-if="preloadStatus" class="mb-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+          <p v-if="preloadStatus.running">{{ $t('dashboard.modelPreloading') }}</p>
+          <p v-else-if="preloadStatus.success_flag === true">{{ $t('dashboard.modelPreloadSuccess') }}</p>
+          <p v-else-if="preloadStatus.success_flag === false">{{ $t('dashboard.modelPreloadFailed') }}</p>
+          <p v-if="preloadStatus.output_dir">Output: {{ preloadStatus.output_dir }}</p>
+        </div>
         <div v-if="modelsStatusLoading" class="py-4 text-center text-gray-500">
           <LoadingSpinner :text="$t('common.loading')" />
         </div>
@@ -183,10 +203,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useTaskStore, useQueueStore } from '@/stores'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useTaskStore, useQueueStore, useAuthStore } from '@/stores'
 import { formatRelativeTime } from '@/utils/format'
-import { getModelsStatus, type ModelsStatusResponse } from '@/api/systemApi'
+import {
+  getModelsStatus,
+  getModelPreloadStatus,
+  startModelPreload,
+  type ModelsStatusResponse,
+  type ModelPreloadStatusResponse,
+} from '@/api/systemApi'
 import StatCard from '@/components/StatCard.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
@@ -206,10 +232,14 @@ import {
 
 const taskStore = useTaskStore()
 const queueStore = useQueueStore()
+const authStore = useAuthStore()
 
 const modelsStatus = ref<ModelsStatusResponse | null>(null)
 const modelsStatusLoading = ref(true)
 const dismissModelTip = ref(false)
+const preloadStatus = ref<ModelPreloadStatusResponse | null>(null)
+const preloadStarting = ref(false)
+let preloadTimer: number | null = null
 
 // 计算最近的任务（最多显示10个）
 const recentTasks = computed(() => {
@@ -232,8 +262,56 @@ async function loadModelsStatus() {
   }
 }
 
+async function loadModelPreloadStatus() {
+  if (!authStore.isAuthenticated) return
+
+  try {
+    const res = await getModelPreloadStatus()
+    preloadStatus.value = res
+  } catch {
+    preloadStatus.value = null
+  }
+}
+
+function startPreloadPolling() {
+  if (preloadTimer) window.clearInterval(preloadTimer)
+  preloadTimer = window.setInterval(async () => {
+    await loadModelPreloadStatus()
+    if (!preloadStatus.value?.running && preloadTimer) {
+      window.clearInterval(preloadTimer)
+      preloadTimer = null
+      await loadModelsStatus()
+    }
+  }, 3000)
+}
+
+async function triggerModelPreload() {
+  preloadStarting.value = true
+  try {
+    await startModelPreload()
+    await loadModelPreloadStatus()
+    startPreloadPolling()
+  } catch (error: any) {
+    alert(error?.response?.data?.detail || '启动模型预下载失败')
+  } finally {
+    preloadStarting.value = false
+  }
+}
+
 onMounted(async () => {
   await refreshTasks()
   await loadModelsStatus()
+  await loadModelPreloadStatus()
+
+  if (preloadStatus.value?.running) {
+    startPreloadPolling()
+  }
+})
+
+onUnmounted(() => {
+  if (preloadTimer) {
+    window.clearInterval(preloadTimer)
+    preloadTimer = null
+  }
 })
 </script>

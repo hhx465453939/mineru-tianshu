@@ -82,6 +82,11 @@ export default {
     queueStats: 'Queue Statistics',
     modelStatus: 'Model Status',
     firstUseTip: 'First-time tip',
+    preloadModels: 'Preload Models',
+    modelPreloading: 'Model preload in progress...',
+    modelPreloadSuccess: 'Model preload completed',
+    modelPreloadFailed: 'Model preload failed, check backend logs',
+    modelCatalog: 'Model Catalog',
   },
   task: {
     title: 'Task',
