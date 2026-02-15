@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/img/logo.png" width="120" alt="Tianshu 天枢 Logo"/>
+
 # Tianshu 天枢
 
 **企业级 AI 数据预处理平台**
