@@ -62,3 +62,4 @@ docker-images-cpu
 models-offline
 cpu-deployment
 *.exe
+TianshuLauncher.exe
