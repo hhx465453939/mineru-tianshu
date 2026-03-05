@@ -191,6 +191,17 @@
           <span v-if="selectedCompletedTasks.length > 0" class="text-sm text-gray-600">
             {{ $t('common.selected') }}: {{ selectedCompletedTasks.length }}
           </span>
+          <label
+            v-if="selectedCompletedTasks.length > 0"
+            class="ml-2 inline-flex items-center gap-2 text-sm text-gray-700"
+          >
+            <input
+              v-model="downloadFullArchive"
+              type="checkbox"
+              class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+            />
+            <span>{{ $t('task.downloadAsArchiveWithAssets') }}</span>
+          </label>
           <button
             v-if="selectedCompletedTasks.length > 0"
             @click="batchDownloadResults"
@@ -198,7 +209,11 @@
             class="btn btn-primary btn-sm flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download class="w-4 h-4 mr-1" />
-            {{ downloading ? $t('common.loading') : $t('task.batchDownloadCompleted') }}
+            {{
+              downloading
+                ? $t('common.loading')
+                : (downloadFullArchive ? $t('task.batchDownloadArchive') : $t('task.batchDownloadCompleted'))
+            }}
           </button>
         </div>
 
@@ -306,6 +321,7 @@ const paginatedTasks = computed(() => {
 const selectedTasks = ref<string[]>([])
 const selectAll = ref(false)
 const downloading = ref(false)
+const downloadFullArchive = ref(false)
 const selectedCompletedTasks = computed(() =>
   selectedTasks.value.filter(id => tasks.value.find(task => task.task_id === id)?.status === 'completed')
 )
@@ -343,6 +359,10 @@ function sanitizeFileName(name: string): string {
 
 function downloadTextFile(content: string, fileName: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType })
+  downloadBlobFile(blob, fileName)
+}
+
+function downloadBlobFile(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -360,6 +380,23 @@ async function batchDownloadResults() {
   }
 
   downloading.value = true
+
+  if (downloadFullArchive.value) {
+    try {
+      const { blob, fileName } = await taskApi.downloadTasksArchive(taskIds)
+      downloadBlobFile(blob, fileName)
+      selectedTasks.value = []
+      selectAll.value = false
+      alert('完整结果压缩包下载已开始，包内包含每个任务的全部输出文件与图片')
+    } catch (error) {
+      console.error('Failed to download full archive:', error)
+      alert('完整结果压缩包下载失败，请稍后重试')
+    } finally {
+      downloading.value = false
+    }
+    return
+  }
+
   const failedTasks: string[] = []
   let downloadedTaskCount = 0
 

@@ -108,6 +108,8 @@ export default {
     downloadMarkdown: '下载 Markdown',
     downloadJson: '下载 JSON',
     batchDownloadCompleted: '批量下载成功任务',
+    batchDownloadArchive: '打包下载完整结果',
+    downloadAsArchiveWithAssets: '打包压缩（含完整目录与图片）',
     submitTask: '提交任务',
     taskList: '任务列表',
     taskDetail: '任务详情',

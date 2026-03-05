@@ -108,3 +108,41 @@ export async function listTasks(
   })
   return response.data
 }
+
+function parseFileNameFromDisposition(disposition?: string): string | null {
+  if (!disposition) return null
+
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1])
+    } catch {
+      return utf8Match[1]
+    }
+  }
+
+  const plainMatch = disposition.match(/filename="?([^";]+)"?/i)
+  if (plainMatch?.[1]) return plainMatch[1]
+  return null
+}
+
+/**
+ * 批量下载任务完整结果目录压缩包
+ */
+export async function downloadTasksArchive(taskIds: string[]): Promise<{ blob: Blob; fileName: string }> {
+  const response = await apiClient.post(
+    '/api/v1/tasks/export/archive',
+    { task_ids: taskIds },
+    { responseType: 'blob' }
+  )
+
+  const header = response.headers?.['content-disposition']
+  const fileName =
+    parseFileNameFromDisposition(header) ||
+    `tianshu_tasks_export_${new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14)}.zip`
+
+  return {
+    blob: response.data as Blob,
+    fileName,
+  }
+}

@@ -108,6 +108,8 @@ export default {
     downloadMarkdown: 'Download Markdown',
     downloadJson: 'Download JSON',
     batchDownloadCompleted: 'Batch Download Completed',
+    batchDownloadArchive: 'Download Full Archive',
+    downloadAsArchiveWithAssets: 'Archive with full outputs/images',
     submitTask: 'Submit Task',
     taskList: 'Task List',
     taskDetail: 'Task Detail',

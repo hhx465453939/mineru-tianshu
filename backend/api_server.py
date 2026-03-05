@@ -12,18 +12,21 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import threading
 import uuid
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
 
 import uvicorn
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from loguru import logger
+from starlette.background import BackgroundTask
 
 # 导入认证模块
 from auth import (
@@ -172,6 +175,12 @@ def process_markdown_images_legacy(md_content: str, image_dir: Path, result_path
     except Exception as e:
         logger.error(f"❌ Failed to process images: {e}")
         return md_content
+
+
+def sanitize_archive_name(name: str) -> str:
+    """Sanitize file/folder names used inside export archive."""
+    sanitized = re.sub(r'[\\/:*?"<>|\r\n]+', "_", name).strip().strip(".")
+    return sanitized or "task"
 
 
 @app.get("/", tags=["系统信息"])
@@ -479,6 +488,136 @@ async def get_task_status(
         logger.info(f"ℹ️  Task status is {task['status']}, skipping content loading")
 
     return response
+
+
+@app.post("/api/v1/tasks/export/archive", tags=["任务管理"])
+async def export_tasks_archive(
+    payload: dict = Body(..., description='批量导出参数，示例: {"task_ids": ["task-id-1", "task-id-2"]}'),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    批量打包导出任务完整结果目录（含图片等所有文件）
+
+    需要认证。普通用户只能导出自己的任务，管理员可导出所有任务。
+    仅打包 completed 且存在 result_path 的任务。
+    """
+    task_ids = payload.get("task_ids")
+    if not isinstance(task_ids, list):
+        raise HTTPException(status_code=400, detail="task_ids must be a list")
+
+    cleaned_task_ids = []
+    seen = set()
+    for raw_task_id in task_ids:
+        task_id = str(raw_task_id).strip()
+        if not task_id or task_id in seen:
+            continue
+        seen.add(task_id)
+        cleaned_task_ids.append(task_id)
+
+    if not cleaned_task_ids:
+        raise HTTPException(status_code=400, detail="No valid task_ids provided")
+
+    fd, tmp_zip_path = tempfile.mkstemp(prefix="tianshu_tasks_export_", suffix=".zip")
+    os.close(fd)
+
+    included = []
+    skipped = []
+
+    def _cleanup_tmp_zip():
+        try:
+            Path(tmp_zip_path).unlink(missing_ok=True)
+        except Exception as cleanup_err:
+            logger.warning(f"⚠️  Failed to cleanup temp zip {tmp_zip_path}: {cleanup_err}")
+
+    try:
+        with zipfile.ZipFile(tmp_zip_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zipf:
+            for task_id in cleaned_task_ids:
+                task = db.get_task(task_id)
+                if not task:
+                    skipped.append({"task_id": task_id, "reason": "Task not found"})
+                    continue
+
+                # 权限检查: 用户只能导出自己的任务，管理员/经理可导出所有任务
+                if not current_user.has_permission(Permission.TASK_VIEW_ALL):
+                    if task.get("user_id") != current_user.user_id:
+                        skipped.append({"task_id": task_id, "reason": "Permission denied"})
+                        continue
+
+                if task.get("status") != "completed":
+                    skipped.append({"task_id": task_id, "reason": f"Task status is {task.get('status')}"})
+                    continue
+
+                result_path = task.get("result_path")
+                if not result_path:
+                    skipped.append({"task_id": task_id, "reason": "result_path is empty"})
+                    continue
+
+                result_dir = Path(result_path)
+                if not result_dir.exists() or not result_dir.is_dir():
+                    skipped.append({"task_id": task_id, "reason": f"result_path not found: {result_path}"})
+                    continue
+
+                base_name = sanitize_archive_name(Path(task.get("file_name") or task_id).stem)
+                archive_root = Path(f"{base_name}_{task_id}")
+                file_count = 0
+
+                for item in result_dir.rglob("*"):
+                    if not item.is_file():
+                        continue
+                    relative = item.relative_to(result_dir)
+                    arcname = (archive_root / relative).as_posix()
+                    zipf.write(item, arcname=arcname)
+                    file_count += 1
+
+                if file_count == 0:
+                    skipped.append({"task_id": task_id, "reason": "No files found under result_path"})
+                    continue
+
+                included.append(
+                    {
+                        "task_id": task_id,
+                        "file_name": task.get("file_name"),
+                        "archive_root": str(archive_root),
+                        "file_count": file_count,
+                    }
+                )
+
+            report = {
+                "exported_at": datetime.now().isoformat(),
+                "requested_task_count": len(cleaned_task_ids),
+                "included_task_count": len(included),
+                "skipped_task_count": len(skipped),
+                "included": included,
+                "skipped": skipped,
+            }
+            zipf.writestr("_export_report.json", json.dumps(report, ensure_ascii=False, indent=2))
+
+        if not included:
+            _cleanup_tmp_zip()
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "No completed tasks with exportable result files",
+                    "skipped": skipped,
+                },
+            )
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        download_name = f"tianshu_tasks_export_{ts}.zip"
+        logger.info(f"📦 Export archive ready: {download_name}, included={len(included)}, skipped={len(skipped)}")
+
+        return FileResponse(
+            path=tmp_zip_path,
+            media_type="application/zip",
+            filename=download_name,
+            background=BackgroundTask(_cleanup_tmp_zip),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        _cleanup_tmp_zip()
+        logger.error(f"❌ Failed to export tasks archive: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to export archive: {e}")
 
 
 @app.delete("/api/v1/tasks/{task_id}", tags=["任务管理"])

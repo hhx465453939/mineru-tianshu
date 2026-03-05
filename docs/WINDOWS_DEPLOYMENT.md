@@ -529,6 +529,7 @@ npm run build
 - 健康检查：http://localhost:18657/api/v1/health  
 
 在前端提交一个小 PDF 任务，选择 **pipeline（MinerU）** 引擎测试；若未装 PaddlePaddle，不要选 **paddleocr-vl** 引擎。
+任务完成后可进入「任务列表」：勾选多个成功任务，再勾选「打包压缩（含完整目录与图片）」即可一键下载完整结果压缩包（含 Markdown/JSON/切图等全部输出文件）。
 
 **一键启动（方式三）**：在项目根目录执行 `python start_dev.py`，会同时启动后端与前端，无需分别 cd 到 backend/frontend 再启动。
 
