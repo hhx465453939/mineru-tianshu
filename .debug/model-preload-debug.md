@@ -63,6 +63,21 @@
   - `docs/WINDOWS_DEPLOYMENT.md`: 补充根目录与 backend 两种等价命令
   - `README.md`: 补充模型管理能力说明
 
+### [2026-03-05 xx:xx] 模型缓存路径迁移到项目目录
+- 问题描述:
+  - 默认模型缓存多写在用户主目录（通常在 C 盘），不便于空间管理与项目级迁移。
+- 根因定位:
+  - YOLO 水印检测模型在 `WatermarkRemover._download_model_from_hf` 中固定使用 `Path.home()/.cache/watermark_models`。
+  - 文档仅说明各功能默认写入 `%USERPROFILE%` 下的缓存目录，未提示如何迁移到项目路径。
+- 解决方案:
+  - 调整 `backend/remove_watermark/watermark_remover.py`，优先读取 `TIANSHU_WATERMARK_CACHE_DIR` / `TIANSHU_MODEL_CACHE_DIR`，否则默认写入项目根目录 `models/watermark_models`。
+  - 在 `docs/WINDOWS_DEPLOYMENT.md` 的「模型下载说明」中，更新水印检测(YOLO11)的默认缓存路径为项目内 `models\watermark_models\`，并补充通过 `.env` 配置 `HF_HOME` / `MODELSCOPE_CACHE` / `PADDLEOCR_HOME` 等变量将各类模型缓存统一迁移到项目目录的示例。
+- 验证结果:
+  - 本地执行 `python -m py_compile backend/remove_watermark/watermark_remover.py` 通过（语法检查）。
+  - 通过阅读与现有设计一致性自检，确认不会影响已下载模型的继续复用（手动移动目录后更新环境变量即可）。
+- 文档更新（新增/修改的 docs 文件与更新点）:
+  - `docs/WINDOWS_DEPLOYMENT.md`: 更新 YOLO11 默认缓存路径，新增统一模型缓存目录的 `.env` 配置示例。
+
 ## 待追踪问题
 - 模型预下载是长任务，前端目前仅展示简要状态；若需要可进一步加实时日志面板
 

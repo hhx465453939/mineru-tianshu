@@ -559,9 +559,12 @@ npm run build
 | **MinerU（PDF 解析）** | 首次用 pipeline 解析 PDF 时 | `%USERPROFILE%\.cache\huggingface\hub\` 或 `%USERPROFILE%\.cache\modelscope\`（由环境变量 `MODEL_DOWNLOAD_SOURCE` / `MINERU_MODEL_SOURCE` 决定） |
 | **PaddleOCR-VL** | 首次用 paddleocr-vl 引擎时 | `%USERPROFILE%\.paddleocr\models\`（约 2GB，由 PaddleOCR 自动管理） |
 | **SenseVoice（音频）** | 首次提交音频转写任务时 | 项目目录下 `models\sensevoice\`（如 `E:\development\mineru-tianshu\models\sensevoice`）或 ModelScope 缓存 |
-| **水印检测（YOLO11）** | 首次使用水印去除时 | `%USERPROFILE%\.cache\watermark_models\` |
+| **水印检测（YOLO11）** | 首次使用水印去除时 | 默认项目目录下 `models\watermark_models\`（可通过环境变量 `TIANSHU_WATERMARK_CACHE_DIR` 或 `TIANSHU_MODEL_CACHE_DIR` 修改） |
 
 - 首次使用某功能时请保持网络畅通；国内建议在 `.env` 中设置 `MODEL_DOWNLOAD_SOURCE=modelscope` 或 `HF_ENDPOINT=https://hf-mirror.com` 以加速。
+- 如需将所有模型下载缓存从系统盘迁移到项目目录，可在 `.env` 中增加例如：  
+  `HF_HOME=E:\development\mineru-tianshu\models-cache\huggingface`、`MODELSCOPE_CACHE=E:\development\mineru-tianshu\models-cache\modelscope`、`PADDLEOCR_HOME=E:\development\mineru-tianshu\models-cache\paddleocr`；  
+  推荐把 `E:\development\mineru-tianshu\models-cache\` 放在非 C 盘，以便统一管理与备份。
 - **可选预下载**：两种写法都可以：  
   1) 在项目根目录执行 `python backend/download_models.py --output ./models-offline`  
   2) 先进入 backend 目录再执行 `python download_models.py --output ../models-offline`  
