@@ -1515,7 +1515,7 @@ def start_litserve_workers(
     accelerator="auto",
     devices="auto",
     workers_per_device=1,
-    port=8001,
+    port=28657,
     poll_interval=0.5,
     enable_worker_loop=True,
     paddleocr_vl_vllm_engine_enabled=False,
@@ -1650,7 +1650,7 @@ if __name__ == "__main__":
         default=None,
         help="Output directory for processed files (default: from OUTPUT_PATH env or /app/output)",
     )
-    parser.add_argument("--port", type=int, default=8001, help="Server port (default: 8001, or from WORKER_PORT env)")
+    parser.add_argument("--port", type=int, default=28657, help="Server port (default: 28657, or from WORKER_PORT env)")
     parser.add_argument(
         "--accelerator",
         type=str,
@@ -1678,7 +1678,7 @@ if __name__ == "__main__":
         "--paddleocr-vl-vllm-api-list",
         type=parse_list_arg,
         default=[],
-        help='PaddleOCR VL VLLM API 列表（Python list 字面量格式，如: \'["http://127.0.0.1:8000/v1", "http://127.0.0.1:8001/v1"]\'）',
+        help='PaddleOCR VL VLLM API 列表（Python list 字面量格式，如: \'["http://127.0.0.1:8000/v1", "http://127.0.0.1:28657/v1"]\'）',
     )
     args = parser.parse_args()
 
@@ -1731,14 +1731,14 @@ if __name__ == "__main__":
 
     # 4. 如果没有通过命令行指定 port，尝试从环境变量 WORKER_PORT 读取
     port = args.port
-    if args.port == 8001:  # 默认值
-        env_port = os.getenv("WORKER_PORT", "8001")
+    if args.port == 28657:  # 默认值
+        env_port = os.getenv("WORKER_PORT", "28657")
         try:
             port = int(env_port)
             logger.info(f"📊 Using port from WORKER_PORT env: {port}")
         except ValueError:
-            logger.warning(f"⚠️  Invalid WORKER_PORT value: {env_port}, using default: 8001")
-            port = 8001
+            logger.warning(f"⚠️  Invalid WORKER_PORT value: {env_port}, using default: 28657")
+            port = 28657
 
     start_litserve_workers(
         output_dir=args.output_dir,

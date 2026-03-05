@@ -35,7 +35,7 @@ MAX_FILE_SIZE_MB = MAX_FILE_SIZE_BYTES / (1024 * 1024) if MAX_FILE_SIZE_BYTES > 
 import uvicorn
 
 # API 配置（从环境变量读取）
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:18657")
 
 # 初始化 MCP Server
 app = Server("mineru-tianshu")

@@ -332,7 +332,7 @@ const scalarConfig = computed(() => ({
       description: '通过前端代理访问（推荐）',
     },
     {
-      url: `${window.location.protocol}//${window.location.hostname}:8000`,
+      url: `${window.location.protocol}//${window.location.hostname}:18657`,
       description: '直接访问后端（用于 API 测试）',
     },
   ],

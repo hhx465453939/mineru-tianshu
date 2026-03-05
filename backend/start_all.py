@@ -2,8 +2,8 @@
 """
 MinerU Tianshu - 启动所有服务
 
-1. API Server (FastAPI) - 端口 8000
-2. LitServe Worker Pool - 端口 8001
+1. API Server (FastAPI) - 端口 18657
+2. LitServe Worker Pool - 端口 28657
 3. Task Scheduler (可选) - 后台任务调度
 4. MCP Server (可选) - 端口 8002
 
@@ -29,8 +29,8 @@ class TianshuLauncher:
     def __init__(
         self,
         output_dir="/tmp/mineru_tianshu_output",
-        api_port=8000,
-        worker_port=8001,
+        api_port=18657,
+        worker_port=28657,
         workers_per_device=1,
         devices="auto",
         accelerator="auto",
@@ -328,8 +328,8 @@ def main():
         default="/tmp/mineru_tianshu_output",
         help="输出目录 (默认: /tmp/mineru_tianshu_output)",
     )
-    parser.add_argument("--api-port", type=int, default=8000, help="API服务器端口 (默认: 8000)")
-    parser.add_argument("--worker-port", type=int, default=8001, help="Worker服务器端口 (默认: 8001)")
+    parser.add_argument("--api-port", type=int, default=18657, help="API服务器端口 (默认: 18657)")
+    parser.add_argument("--worker-port", type=int, default=28657, help="Worker服务器端口 (默认: 28657)")
     parser.add_argument(
         "--accelerator",
         type=str,

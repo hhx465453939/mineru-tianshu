@@ -120,7 +120,7 @@ docker compose up -d
 1. 等待约 10～30 秒（首次启动可能更久，需拉取镜像、下载模型等）。  
 2. 在浏览器中访问：
    - 前端：http://localhost:80  
-   - API 文档：http://localhost:8000/docs  
+   - API 文档：http://localhost:18657/docs  
 3. 若前端能打开、API 文档能打开，说明部署成功。  
 4. （可选）在容器内检查 GPU 是否可见（PowerShell 中执行）：
    ```powershell
@@ -293,8 +293,8 @@ npm run dev
 ### 9. 访问与验证
 
 - 前端：http://localhost:3000（开发模式，与 vite.config 一致）  
-- API 文档：http://localhost:8000/docs  
-- 健康检查：浏览器打开 http://localhost:8000/api/v1/health  
+- API 文档：http://localhost:18657/docs  
+- 健康检查：浏览器打开 http://localhost:18657/api/v1/health  
 
 ---
 
@@ -512,7 +512,7 @@ npm install
 npm run dev
 ```
 
-默认前端地址：http://localhost:3000 ，且已配置将 `/api` 代理到 `http://localhost:8000`，无需改后端端口。
+默认前端地址：http://localhost:3000 ，且已配置将 `/api` 代理到 `http://localhost:18657`，无需改后端端口。
 
 **生产模式（构建后提供静态资源）：**
 
@@ -520,13 +520,13 @@ npm run dev
 npm run build
 ```
 
-构建产物在 `frontend/dist`。可用任意静态服务器托管该目录（如 `npx serve dist -p 3000`），或放到 Nginx 等；访问时需保证请求 `/api` 时被转发到本机 8000 端口。
+构建产物在 `frontend/dist`。可用任意静态服务器托管该目录（如 `npx serve dist -p 3000`），或放到 Nginx 等；访问时需保证请求 `/api` 时被转发到本机 18657 端口。
 
 ### 7. 访问与验证
 
 - 前端（开发）：http://localhost:3000  
-- API 文档：http://localhost:8000/docs  
-- 健康检查：http://localhost:8000/api/v1/health  
+- API 文档：http://localhost:18657/docs  
+- 健康检查：http://localhost:18657/api/v1/health  
 
 在前端提交一个小 PDF 任务，选择 **pipeline（MinerU）** 引擎测试；若未装 PaddlePaddle，不要选 **paddleocr-vl** 引擎。
 
@@ -590,7 +590,7 @@ npm run build
 | 1 | 本机执行 `nvidia-smi` | 能看到 RTX 3060 及驱动版本 |
 | 2 | Docker 方式：`docker compose exec worker nvidia-smi` | 容器内能看到 GPU |
 | 3 | 浏览器打开 http://localhost:80（Docker）或 http://localhost:5173（WSL2 本地） | 前端页面正常显示 |
-| 4 | 浏览器打开 http://localhost:8000/docs | Swagger API 文档可打开 |
+| 4 | 浏览器打开 http://localhost:18657/docs | Swagger API 文档可打开 |
 | 5 | 在前端提交一个小的 PDF 任务 | 任务能进入队列并完成（或至少 Worker 能拉取到任务） |
 
 ---
@@ -613,7 +613,7 @@ npm run build
 - 查看 Worker 是否启动成功：`docker compose logs worker`（Docker）或查看运行 `start_all.py` 的终端（WSL2）。  
 - 检查显存是否不足：单卡 3060 建议 `--workers-per-device 1`，或在 `.env` 中设置 `WORKER_GPUS=1` 后重启。
 
-### 4. 端口被占用（80、8000、8001、8002）
+### 4. 端口被占用（80、18657、28657、8002）
 
 - 修改 `.env` 中的 `API_PORT`、`WORKER_PORT`、`MCP_PORT`、`FRONTEND_PORT` 为未被占用的端口。  
 - 或关闭占用端口的程序后重试。

@@ -8,8 +8,8 @@ import axios, { AxiosInstance } from 'axios'
  *
  * 优先级：
  * 1. 环境变量 VITE_API_BASE_URL
- * 2. 生产环境：使用当前域名 + 8000 端口
- * 3. 开发环境：http://localhost:8000
+ * 2. 生产环境：使用当前域名 + 18657 端口
+ * 3. 开发环境：http://localhost:18657
  */
 function getApiBaseUrl(): string {
   // 1. 优先使用环境变量
@@ -21,12 +21,12 @@ function getApiBaseUrl(): string {
   if (import.meta.env.PROD) {
     const protocol = window.location.protocol // http: or https:
     const hostname = window.location.hostname // 域名或 IP
-    const apiPort = import.meta.env.VITE_API_PORT || '8000' // 后端端口，默认 8000
+    const apiPort = import.meta.env.VITE_API_PORT || '18657' // 后端端口，默认 18657
     return `${protocol}//${hostname}:${apiPort}`
   }
 
   // 3. 开发环境：使用 localhost
-  return 'http://localhost:8000'
+  return 'http://localhost:18657'
 }
 
 const API_BASE_URL = getApiBaseUrl()

@@ -1046,8 +1046,8 @@ logger.info(f"📁 File service mounted: /v1/files/output -> {OUTPUT_DIR}")
 logger.info("   Frontend can access images via: /api/v1/files/output/{task_id}/images/xxx.jpg (Nginx will strip /api/)")
 
 if __name__ == "__main__":
-    # 从环境变量读取端口，默认为8000
-    api_port = int(os.getenv("API_PORT", "8000"))
+    # 从环境变量读取端口，默认为18657
+    api_port = int(os.getenv("API_PORT", "18657"))
 
     logger.info("🚀 Starting MinerU Tianshu API Server...")
     logger.info(f"📖 API Documentation: http://localhost:{api_port}/docs")

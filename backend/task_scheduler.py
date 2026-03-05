@@ -39,7 +39,7 @@ class TaskScheduler:
 
     def __init__(
         self,
-        litserve_url="http://localhost:8001/predict",
+        litserve_url="http://localhost:28657/predict",
         monitor_interval=300,
         health_check_interval=900,
         stale_task_timeout=60,
@@ -216,7 +216,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="MinerU Tianshu Task Scheduler (Optional)")
-    parser.add_argument("--litserve-url", type=str, default="http://localhost:8001/predict", help="LitServe worker URL")
+    parser.add_argument("--litserve-url", type=str, default="http://localhost:28657/predict", help="LitServe worker URL")
     parser.add_argument(
         "--monitor-interval", type=int, default=300, help="Monitor interval in seconds (default: 300s = 5 minutes)"
     )
