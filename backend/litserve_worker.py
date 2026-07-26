@@ -199,6 +199,12 @@ class MinerUWorkerAPI(ls.LitAPI):
         Args:
             device: 设备 ID (cuda:0, cuda:1, cpu 等)
         """
+        # 【最先】把 ModelScope/HF 模型缓存重定向到项目内 models-offline。
+        # 必须在下方 import mineru/paddleocr/funasr 之前生效；防御非 start_all 启动场景（如 exe 直拉 worker）。
+        from utils.model_cache import configure_model_cache_env
+
+        configure_model_cache_env()
+
         ## 配置每个 Worker 的全局索引并尝试性分配self.paddleocr_vl_vllm_api
         with self._global_worker_counter.get_lock():
             my_global_index = self._global_worker_counter.value
@@ -235,12 +241,19 @@ class MinerUWorkerAPI(ls.LitAPI):
 
         if model_source in ["modelscope", "auto"]:
             # 尝试使用 ModelScope（优先）
+            # ⚠️ 关键：auto 模式下若检测到 modelscope 已安装，必须真正把 model_source 切到 "modelscope"，
+            # 否则下方 elif 分支不会设置 MINERU_MODEL_SOURCE，MinerU 会回退到默认的 HuggingFace 源。
+            # 国内访问 HF 镜像（hf-mirror）的 resolve 链接常因 308 重定向/header 不符而失败，
+            # 进而触发 LocalEntryNotFoundError。详见 models_download_utils.py:17。
             try:
                 import importlib.util
 
                 if importlib.util.find_spec("modelscope") is not None:
                     logger.info("📦 Model download source: ModelScope (国内推荐)")
                     logger.info("   Note: ModelScope automatically uses China mirror for faster downloads")
+                    if model_source == "auto":
+                        logger.info("   (auto 模式检测到 modelscope 已安装 → 自动切换为 ModelScope 源)")
+                    model_source = "modelscope"
                 else:
                     raise ImportError("modelscope not found")
             except ImportError:

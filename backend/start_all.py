@@ -297,6 +297,14 @@ def main():
         logger.error("❌ .env file not found.")
         logger.error("Please create a .env file in the backend directory or project root (copy from .env.example).")
         sys.exit(1)
+
+    # 【模型缓存重定向】把 ModelScope/HF 缓存统一到项目内 models-offline（避免写入 C 盘 ~/.cache）
+    # 必须在启动子进程前设置，使其通过 os.environ.copy() 传递给 api/worker/scheduler/mcp 全部子进程
+    from utils.model_cache import configure_model_cache_env
+
+    configure_model_cache_env(project_root)
+    logger.info(f"📦 模型缓存已重定向到项目内: {project_root / 'models-offline'}")
+
     parser = argparse.ArgumentParser(
         description="MinerU Tianshu - 统一启动脚本",
         formatter_class=argparse.RawDescriptionHelpFormatter,

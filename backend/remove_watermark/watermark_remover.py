@@ -76,13 +76,15 @@ class WatermarkRemover:
         except ImportError:
             raise ImportError("huggingface_hub not installed. Install: pip install huggingface-hub")
 
-        # 优先使用环境变量或项目本地缓存目录，避免固定写入用户主目录（C 盘）
+        # 优先使用环境变量，否则统一到项目内 models-offline/watermark_models
+        # （与 download_models.py 预下载位置一致，可直接复用已下载的 HF cache，避免重复下载）
         env_cache_dir = os.getenv("TIANSHU_WATERMARK_CACHE_DIR") or os.getenv("TIANSHU_MODEL_CACHE_DIR")
         if env_cache_dir:
             cache_dir = Path(env_cache_dir)
         else:
-            project_root = Path(__file__).parent.parent.parent
-            cache_dir = project_root / "models" / "watermark_models"
+            from utils.model_cache import get_models_offline_root
+
+            cache_dir = get_models_offline_root() / "watermark_models"
 
         cache_dir.mkdir(parents=True, exist_ok=True)
 

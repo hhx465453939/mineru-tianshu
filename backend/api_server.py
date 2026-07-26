@@ -1010,38 +1010,41 @@ async def get_models_status():
 
     检测各引擎默认缓存目录是否有模型文件，便于用户了解是否需等待首次下载。
     """
-    home = Path.home()
-    project_root = Path(__file__).parent.parent
+    # 各引擎缓存目录（已由 utils.model_cache 统一重定向到项目内 models-offline）
+    from utils.model_cache import get_active_cache_dirs
+
+    dirs = get_active_cache_dirs()
     status = {}
 
-    # MinerU：HuggingFace 或 ModelScope 缓存
-    hf_hub = home / ".cache" / "huggingface" / "hub"
-    ms_hub = home / ".cache" / "modelscope" / "hub"
-    mineru_ready = _check_model_cache_dir(hf_hub) or _check_model_cache_dir(ms_hub)
+    # MinerU：ModelScope（当前默认源）或 HuggingFace 缓存 —— 均在项目内 models-offline
+    ms_hub = dirs["modelscope_hub"]
+    hf_hub = dirs["hf_hub"]
+    mineru_ready = _check_model_cache_dir(ms_hub) or _check_model_cache_dir(hf_hub)
     status["mineru"] = {
         "ready": mineru_ready,
         "name": "MinerU（PDF 解析）",
-        "cache_hint": "~/.cache/huggingface/hub 或 ~/.cache/modelscope/hub",
-        "message": "已缓存" if mineru_ready else "首次解析 PDF 时将自动下载",
+        "cache_hint": "项目内 models-offline/modelscope/hub 或 models-offline/huggingface/hub",
+        "message": "已缓存" if mineru_ready else "首次解析 PDF 时将自动下载（缓存到项目内 models-offline）",
     }
 
-    # PaddleOCR-VL
-    paddle_models = home / ".paddleocr" / "models"
+    # PaddleOCR-VL（SDK 自管理，本次未迁移，仍在用户主目录）
+    paddle_models = dirs["paddleocr_models"]
+    paddle_ready = _check_model_cache_dir(paddle_models)
     status["paddleocr"] = {
-        "ready": _check_model_cache_dir(paddle_models),
+        "ready": paddle_ready,
         "name": "PaddleOCR-VL",
-        "cache_hint": "~/.paddleocr/models",
-        "message": "已缓存" if _check_model_cache_dir(paddle_models) else "首次使用该引擎时将自动下载（约 2GB）",
+        "cache_hint": "~/.paddleocr/models（SDK 自管理，未迁移）",
+        "message": "已缓存" if paddle_ready else "首次使用该引擎时将自动下载（约 2GB）",
     }
 
-    # SenseVoice：项目 models/sensevoice 或 ModelScope 缓存
-    sensevoice_local = project_root / "models" / "sensevoice"
-    ms_cache = home / ".cache" / "modelscope"
+    # SenseVoice：项目 models/sensevoice 或 ModelScope 缓存（ModelScope 已重定向到项目内）
+    sensevoice_local = dirs["sensevoice_local"]
+    ms_cache = ms_hub.parent  # models-offline/modelscope
     sensevoice_ready = _check_model_cache_dir(sensevoice_local) or _check_model_cache_dir(ms_cache)
     status["sensevoice"] = {
         "ready": sensevoice_ready,
         "name": "SenseVoice（音频）",
-        "cache_hint": "项目 models/sensevoice 或 ~/.cache/modelscope",
+        "cache_hint": "项目 models/sensevoice 或 models-offline/modelscope",
         "message": "已缓存" if sensevoice_ready else "首次提交音频任务时将自动下载",
     }
 
