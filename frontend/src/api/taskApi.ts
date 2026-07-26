@@ -146,3 +146,23 @@ export async function downloadTasksArchive(taskIds: string[]): Promise<{ blob: B
     fileName,
   }
 }
+
+/**
+ * 批量硬删除任务（数据库记录 + 上传文件 + 结果目录，不可恢复）
+ */
+export async function batchDeleteTasks(taskIds: string[]): Promise<ApiResponse> {
+  const response = await apiClient.post<ApiResponse>('/api/v1/tasks/batch/delete', {
+    task_ids: taskIds,
+  })
+  return response.data
+}
+
+/**
+ * 批量原地重启任务（仅 failed/pending 生效，重置为 pending 并重新入队，复用原上传文件）
+ */
+export async function batchRestartTasks(taskIds: string[]): Promise<ApiResponse> {
+  const response = await apiClient.post<ApiResponse>('/api/v1/tasks/batch/restart', {
+    task_ids: taskIds,
+  })
+  return response.data
+}

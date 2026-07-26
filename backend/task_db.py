@@ -664,6 +664,133 @@ class TaskDB:
             deleted_count = cursor.rowcount
             return deleted_count
 
+    def delete_tasks_batch(self, task_ids: List[str]) -> Dict:
+        """
+        批量硬删除任务（数据库记录 + 上传文件 + 结果目录，不可恢复）
+
+        Args:
+            task_ids: 要删除的任务 ID 列表
+
+        Returns:
+            {"deleted": [...], "failed": [{"task_id","reason"}, ...]}
+            （task_ids 中不存在于 DB 的计入 failed）
+        """
+        from pathlib import Path
+        import shutil
+
+        if not task_ids:
+            return {"deleted": [], "failed": []}
+
+        with self.get_cursor() as cursor:
+            placeholders = ",".join("?" * len(task_ids))
+            cursor.execute(
+                f"SELECT task_id, file_path, result_path FROM tasks WHERE task_id IN ({placeholders})",
+                task_ids,
+            )
+            rows = cursor.fetchall()
+
+            found_ids: List[str] = []
+            for row in rows:
+                task_id = row["task_id"]
+                found_ids.append(task_id)
+
+                # 1. 删除上传的原始文件
+                if row["file_path"]:
+                    fp = Path(row["file_path"])
+                    if fp.exists() and fp.is_file():
+                        try:
+                            fp.unlink()
+                        except Exception as e:
+                            logger.warning(f"Failed to delete upload file for task {task_id}: {e}")
+
+                # 2. 删除结果文件夹（含所有生成文件与中间文件）
+                if row["result_path"]:
+                    rp = Path(row["result_path"])
+                    if rp.exists() and rp.is_dir():
+                        try:
+                            shutil.rmtree(rp)
+                        except Exception as e:
+                            logger.warning(f"Failed to delete result dir for task {task_id}: {e}")
+
+            # 3. 删除数据库记录
+            cursor.execute(
+                f"DELETE FROM tasks WHERE task_id IN ({placeholders})",
+                task_ids,
+            )
+
+            found_set = set(found_ids)
+            failed = [{"task_id": tid, "reason": "not found"} for tid in task_ids if tid not in found_set]
+
+        logger.info(f"🗑️  Batch deleted {len(found_ids)} tasks")
+        return {"deleted": found_ids, "failed": failed}
+
+    def restart_tasks_batch(self, task_ids: List[str]) -> Dict:
+        """
+        批量原地重启任务：仅对 failed/pending 重置为 pending 并重新入队（复用原上传文件，无需重传）
+
+        Args:
+            task_ids: 要重启的任务 ID 列表
+
+        Returns:
+            {"restarted": [...], "skipped": [{"task_id","reason"}, ...],
+             "failed": [{"task_id","reason"}, ...]}
+            （非 failed/pending 状态计入 skipped；不存在计入 failed）
+        """
+        if not task_ids:
+            return {"restarted": [], "skipped": [], "failed": []}
+
+        restarted: List[str] = []
+        skipped: List[Dict] = []
+        failed: List[Dict] = []
+
+        with self.get_cursor() as cursor:
+            placeholders = ",".join("?" * len(task_ids))
+            cursor.execute(
+                f"SELECT task_id, status, priority FROM tasks WHERE task_id IN ({placeholders})",
+                task_ids,
+            )
+            rows = {row["task_id"]: dict(row) for row in cursor.fetchall()}
+
+            for tid in task_ids:
+                row = rows.get(tid)
+                if not row:
+                    failed.append({"task_id": tid, "reason": "not found"})
+                    continue
+                if row["status"] not in ("failed", "pending"):
+                    skipped.append({"task_id": tid, "reason": f"status={row['status']}"})
+                    continue
+
+                cursor.execute(
+                    """
+                    UPDATE tasks
+                    SET status = 'pending',
+                        worker_id = NULL,
+                        started_at = NULL,
+                        completed_at = NULL,
+                        error_message = NULL,
+                        result_path = NULL
+                    WHERE task_id = ?
+                    """,
+                    (tid,),
+                )
+                if cursor.rowcount > 0:
+                    restarted.append(tid)
+                else:
+                    failed.append({"task_id": tid, "reason": "update failed"})
+
+        # 重新入队（Redis 模式；SQLite 模式靠 worker 拉 pending）
+        for tid in restarted:
+            row = rows.get(tid, {})
+            try:
+                self._enqueue_to_redis(tid, row.get("priority", 0))
+            except Exception as e:
+                logger.warning(f"Failed to re-enqueue restarted task {tid}: {e}")
+
+        logger.info(
+            f"🔄 Batch restarted {len(restarted)} tasks (skipped {len(skipped)}, failed {len(failed)})"
+        )
+        return {"restarted": restarted, "skipped": skipped, "failed": failed}
+
     def reset_stale_tasks(self, timeout_minutes: int = 60):
         """
         重置超时的 processing 任务为 pending

@@ -23,6 +23,7 @@ from urllib.parse import quote
 
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Depends, Body
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from loguru import logger
@@ -649,6 +650,78 @@ async def cancel_task(task_id: str, current_user: User = Depends(get_current_act
         return {"success": True, "message": "Task cancelled successfully"}
     else:
         raise HTTPException(status_code=400, detail=f"Cannot cancel task in {task['status']} status")
+
+
+class BatchTaskRequest(BaseModel):
+    """批量任务操作请求体"""
+    task_ids: list[str]
+
+
+def _filter_task_ids_by_permission(task_ids: list[str], current_user: User) -> list[str]:
+    """按权限过滤 task_ids：有 TASK_DELETE_ALL 权限则全部放行，否则只保留本人任务。"""
+    if current_user.has_permission(Permission.TASK_DELETE_ALL):
+        return list(task_ids)
+
+    placeholders = ",".join("?" * len(task_ids))
+    with db.get_cursor() as cursor:
+        cursor.execute(
+            f"SELECT task_id FROM tasks WHERE task_id IN ({placeholders}) AND user_id = ?",
+            (*task_ids, current_user.user_id),
+        )
+        return [row["task_id"] for row in cursor.fetchall()]
+
+
+@app.post("/api/v1/tasks/batch/delete", tags=["任务管理"])
+async def batch_delete_tasks(
+    req: BatchTaskRequest,
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    批量硬删除任务（数据库记录 + 上传文件 + 结果目录，不可恢复）
+
+    需要认证。普通用户只能删除自己的任务，管理员（TASK_DELETE_ALL）可删除任意任务。
+    """
+    if not req.task_ids:
+        raise HTTPException(status_code=400, detail="task_ids 不能为空")
+    if len(req.task_ids) > 500:
+        raise HTTPException(status_code=400, detail="单次最多操作 500 个任务")
+
+    allowed_ids = _filter_task_ids_by_permission(req.task_ids, current_user)
+    if not allowed_ids:
+        raise HTTPException(status_code=403, detail="没有权限删除这些任务")
+
+    result = db.delete_tasks_batch(allowed_ids)
+    logger.info(
+        f"🗑️  Batch delete by {current_user.username}: deleted={len(result['deleted'])}, failed={len(result['failed'])}"
+    )
+    return {"success": True, **result}
+
+
+@app.post("/api/v1/tasks/batch/restart", tags=["任务管理"])
+async def batch_restart_tasks(
+    req: BatchTaskRequest,
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    批量原地重启任务（仅对 failed/pending 生效，重置为 pending 并重新入队，复用原上传文件）
+
+    需要认证。普通用户只能重启自己的任务，管理员可重启任意任务。
+    """
+    if not req.task_ids:
+        raise HTTPException(status_code=400, detail="task_ids 不能为空")
+    if len(req.task_ids) > 500:
+        raise HTTPException(status_code=400, detail="单次最多操作 500 个任务")
+
+    allowed_ids = _filter_task_ids_by_permission(req.task_ids, current_user)
+    if not allowed_ids:
+        raise HTTPException(status_code=403, detail="没有权限重启这些任务")
+
+    result = db.restart_tasks_batch(allowed_ids)
+    logger.info(
+        f"🔄 Batch restart by {current_user.username}: restarted={len(result['restarted'])}, "
+        f"skipped={len(result['skipped'])}, failed={len(result['failed'])}"
+    )
+    return {"success": True, **result}
 
 
 @app.get("/api/v1/queue/stats", tags=["队列管理"])

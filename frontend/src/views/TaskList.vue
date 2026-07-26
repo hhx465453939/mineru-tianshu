@@ -135,7 +135,7 @@
                 <input
                   v-model="selectedTasks"
                   :value="task.task_id"
-                  :disabled="task.status !== 'completed'"
+                  :disabled="!['completed', 'failed', 'pending'].includes(task.status)"
                   type="checkbox"
                   class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 disabled:opacity-40 disabled:cursor-not-allowed"
                 />
@@ -187,10 +187,28 @@
       <!-- 批量操作和分页 -->
       <div v-if="filteredTasks.length > 0" class="mt-4 flex items-center justify-between">
         <!-- 批量操作 -->
-        <div class="flex items-center gap-2">
-          <span v-if="selectedCompletedTasks.length > 0" class="text-sm text-gray-600">
-            {{ $t('common.selected') }}: {{ selectedCompletedTasks.length }}
+        <div class="flex items-center gap-2 flex-wrap">
+          <span v-if="selectedTasks.length > 0" class="text-sm text-gray-600">
+            {{ $t('common.selected') }}: {{ selectedTasks.length }}
           </span>
+          <button
+            v-if="selectedFailedIds.length > 0"
+            @click="askBatchRestart"
+            class="btn btn-secondary btn-sm flex items-center"
+            :title="$t('task.batchRestart')"
+          >
+            <RotateCcw class="w-4 h-4 mr-1" />
+            {{ $t('task.batchRestart') }} ({{ selectedFailedIds.length }})
+          </button>
+          <button
+            v-if="selectedFailedIds.length > 0 || selectedPendingIds.length > 0"
+            @click="askBatchDelete"
+            class="btn btn-sm flex items-center text-white bg-red-600 hover:bg-red-700"
+            :title="$t('task.batchDelete')"
+          >
+            <Trash2 class="w-4 h-4 mr-1" />
+            {{ $t('task.batchDelete') }}
+          </button>
           <label
             v-if="selectedCompletedTasks.length > 0"
             class="ml-2 inline-flex items-center gap-2 text-sm text-gray-700"
@@ -219,6 +237,13 @@
 
         <!-- 分页 -->
         <div class="flex items-center gap-2">
+          <select
+            v-model="pageSize"
+            class="px-2 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            :title="$t('task.pageSize')"
+          >
+            <option v-for="s in [10, 20, 50, 100, 200]" :key="s" :value="s">{{ s }} / {{ $t('common.page') }}</option>
+          </select>
           <button
             @click="currentPage--"
             :disabled="currentPage === 1"
@@ -247,6 +272,14 @@
       :message="cancelDialogMessage"
       @confirm="confirmCancel"
     />
+
+    <!-- 批量操作确认对话框 -->
+    <ConfirmDialog
+      v-model="showBatchDialog"
+      :title="$t('common.confirm')"
+      :message="batchDialogMessage"
+      @confirm="confirmBatchAction"
+    />
   </div>
 </template>
 
@@ -269,6 +302,8 @@ import {
   FileQuestion,
   ChevronLeft,
   ChevronRight,
+  Trash2,
+  RotateCcw,
 } from 'lucide-vue-next'
 import type { TaskStatus, Backend } from '@/api/types'
 
@@ -308,12 +343,12 @@ const filteredTasks = computed(() => {
 })
 
 // 分页
-const pageSize = 20
+const pageSize = ref(Number(localStorage.getItem('taskList.pageSize')) || 20)
 const currentPage = ref(1)
-const totalPages = computed(() => Math.ceil(filteredTasks.value.length / pageSize))
+const totalPages = computed(() => Math.ceil(filteredTasks.value.length / pageSize.value))
 const paginatedTasks = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  const end = start + pageSize
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
   return filteredTasks.value.slice(start, end)
 })
 
@@ -327,8 +362,15 @@ const selectedCompletedTasks = computed(() =>
 )
 const selectableTaskIdsOnPage = computed(() =>
   paginatedTasks.value
-    .filter(task => task.status === 'completed')
+    .filter(task => ['completed', 'failed', 'pending'].includes(task.status))
     .map(task => task.task_id)
+)
+// 按状态分类的选中任务（用于批量删除/重启）
+const selectedFailedIds = computed(() =>
+  selectedTasks.value.filter(id => tasks.value.find(t => t.task_id === id)?.status === 'failed')
+)
+const selectedPendingIds = computed(() =>
+  selectedTasks.value.filter(id => tasks.value.find(t => t.task_id === id)?.status === 'pending')
 )
 
 function toggleSelectAll() {
@@ -453,6 +495,52 @@ async function confirmCancel() {
   selectAll.value = false
   await refreshTasks()
 }
+
+// 批量删除/重启
+const showBatchDialog = ref(false)
+const batchDialogMessage = ref('')
+const pendingBatchAction = ref<{ type: 'delete' | 'restart'; ids: string[] } | null>(null)
+
+function askBatchDelete() {
+  const ids = [...new Set([...selectedFailedIds.value, ...selectedPendingIds.value])]
+  if (ids.length === 0) return
+  pendingBatchAction.value = { type: 'delete', ids }
+  batchDialogMessage.value = `确定要硬删除选中的 ${ids.length} 个任务吗？此操作不可恢复，将删除任务记录与所有相关文件。`
+  showBatchDialog.value = true
+}
+
+function askBatchRestart() {
+  const ids = selectedFailedIds.value
+  if (ids.length === 0) return
+  pendingBatchAction.value = { type: 'restart', ids }
+  batchDialogMessage.value = `确定要原地重启选中的 ${ids.length} 个失败任务吗？将重置为排队状态并复用原文件。`
+  showBatchDialog.value = true
+}
+
+async function confirmBatchAction() {
+  const action = pendingBatchAction.value
+  if (!action) return
+  try {
+    if (action.type === 'delete') {
+      await taskApi.batchDeleteTasks(action.ids)
+    } else {
+      await taskApi.batchRestartTasks(action.ids)
+    }
+  } catch (err) {
+    console.error('Batch action failed:', err)
+    alert('批量操作失败，请稍后重试')
+  }
+  pendingBatchAction.value = null
+  selectedTasks.value = []
+  selectAll.value = false
+  await refreshTasks()
+}
+
+// 切换每页条数时回到第一页并持久化
+watch(pageSize, (v) => {
+  currentPage.value = 1
+  localStorage.setItem('taskList.pageSize', String(v))
+})
 
 async function applyFilters() {
   currentPage.value = 1

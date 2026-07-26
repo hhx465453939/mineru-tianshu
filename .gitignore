@@ -51,6 +51,9 @@ logs/
 # Data directory
 data/
 
+# Cache directory
+cache/
+
 # Temporary files
 *.tmp
 *.bak
