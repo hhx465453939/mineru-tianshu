@@ -104,20 +104,20 @@
                   class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                 />
               </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                {{ $t('task.fileName') }}
+              <th @click="toggleSort('file_name')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700">
+                {{ $t('task.fileName') }} <span class="text-gray-400 font-normal">{{ sortIndicator('file_name') }}</span>
               </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                {{ $t('task.status') }}
+              <th @click="toggleSort('status')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700">
+                {{ $t('task.status') }} <span class="text-gray-400 font-normal">{{ sortIndicator('status') }}</span>
               </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                {{ $t('task.backend') }}
+              <th @click="toggleSort('backend')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700">
+                {{ $t('task.backend') }} <span class="text-gray-400 font-normal">{{ sortIndicator('backend') }}</span>
               </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                {{ $t('task.createdAt') }}
+              <th @click="toggleSort('created_at')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700">
+                {{ $t('task.createdAt') }} <span class="text-gray-400 font-normal">{{ sortIndicator('created_at') }}</span>
               </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Worker
+              <th @click="toggleSort('worker_id')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700">
+                Worker <span class="text-gray-400 font-normal">{{ sortIndicator('worker_id') }}</span>
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 {{ $t('task.actions') }}
@@ -342,6 +342,48 @@ const filteredTasks = computed(() => {
   return result
 })
 
+// 排序
+type SortKey = 'file_name' | 'status' | 'backend' | 'created_at' | 'worker_id'
+const sortKey = ref<SortKey | null>(null)
+const sortOrder = ref<'asc' | 'desc'>('asc')
+
+function toggleSort(key: SortKey) {
+  if (sortKey.value === key) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortKey.value = key
+    sortOrder.value = 'asc'
+  }
+  currentPage.value = 1
+}
+
+function sortIndicator(key: SortKey): string {
+  if (sortKey.value !== key) return '↕'
+  return sortOrder.value === 'asc' ? '↑' : '↓'
+}
+
+// 筛选 → 排序
+const sortedFilteredTasks = computed(() => {
+  const list = filteredTasks.value
+  if (!sortKey.value) return list
+  const key = sortKey.value
+  const dir = sortOrder.value === 'asc' ? 1 : -1
+  return [...list].sort((a, b) => {
+    const va = (a as Record<string, unknown>)[key]
+    const vb = (b as Record<string, unknown>)[key]
+    if (key === 'created_at') {
+      const ta = va ? new Date(String(va)).getTime() : 0
+      const tb = vb ? new Date(String(vb)).getTime() : 0
+      return (ta - tb) * dir
+    }
+    const sa = (va ?? '').toString().toLowerCase()
+    const sb = (vb ?? '').toString().toLowerCase()
+    if (sa < sb) return -1 * dir
+    if (sa > sb) return 1 * dir
+    return 0
+  })
+})
+
 // 分页
 const pageSize = ref(Number(localStorage.getItem('taskList.pageSize')) || 20)
 const currentPage = ref(1)
@@ -349,7 +391,7 @@ const totalPages = computed(() => Math.ceil(filteredTasks.value.length / pageSiz
 const paginatedTasks = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
   const end = start + pageSize.value
-  return filteredTasks.value.slice(start, end)
+  return sortedFilteredTasks.value.slice(start, end)
 })
 
 // 选择
