@@ -201,13 +201,13 @@
             {{ $t('task.batchRestart') }} ({{ selectedFailedIds.length }})
           </button>
           <button
-            v-if="selectedFailedIds.length > 0 || selectedPendingIds.length > 0"
+            v-if="selectedTasks.length > 0"
             @click="askBatchDelete"
             class="btn btn-sm flex items-center text-white bg-red-600 hover:bg-red-700"
             :title="$t('task.batchDelete')"
           >
             <Trash2 class="w-4 h-4 mr-1" />
-            {{ $t('task.batchDelete') }}
+            {{ $t('task.batchDelete') }} ({{ selectedTasks.length }})
           </button>
           <label
             v-if="selectedCompletedTasks.length > 0"
@@ -544,7 +544,7 @@ const batchDialogMessage = ref('')
 const pendingBatchAction = ref<{ type: 'delete' | 'restart'; ids: string[] } | null>(null)
 
 function askBatchDelete() {
-  const ids = [...new Set([...selectedFailedIds.value, ...selectedPendingIds.value])]
+  const ids = [...selectedTasks.value]
   if (ids.length === 0) return
   pendingBatchAction.value = { type: 'delete', ids }
   batchDialogMessage.value = `确定要硬删除选中的 ${ids.length} 个任务吗？此操作不可恢复，将删除任务记录与所有相关文件。`
