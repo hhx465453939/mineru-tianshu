@@ -76,6 +76,27 @@ initialize_directories() {
 }
 
 # ============================================================================
+# Config initialization (✅ 核心修复：自动分发配置文件)
+# MinerU 3.0 配置文件从 magic-pdf.json 改名为 mineru.json
+# 默认路径: ~/mineru.json (由 MINERU_TOOLS_CONFIG_JSON 环境变量控制)
+# ============================================================================
+setup_mineru_config() {
+    log_info "Setting up MinerU configuration (mineru.json)..."
+
+    # 该文件由 download_models.py 生成到共享卷 /app/models 中
+    CONFIG_SRC="/app/models/mineru.json"
+    CONFIG_FILENAME="${MINERU_TOOLS_CONFIG_JSON:-mineru.json}"
+    CONFIG_DEST="/root/${CONFIG_FILENAME}"
+
+    if [ -f "$CONFIG_SRC" ]; then
+        cp "$CONFIG_SRC" "${CONFIG_DEST}"
+        log_success "mineru.json distributed to ${CONFIG_DEST}"
+    else
+        log_warning "$CONFIG_SRC not found. MinerU might use default internal settings."
+    fi
+}
+
+# ============================================================================
 # Model initialization
 # ============================================================================
 initialize_models() {
@@ -205,6 +226,10 @@ main() {
     # Run checks (pass service type)
     check_environment "$SERVICE_TYPE"
     initialize_directories
+
+    # ✅ 在初始化目录后，执行配置分发
+    setup_mineru_config
+
     initialize_database
 
     # Initialize models before checking (for worker only)

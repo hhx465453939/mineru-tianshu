@@ -5,6 +5,7 @@
 import type {
   SystemConfigResponse,
   SystemConfigUpdateRequest,
+  EnginesResponse,
 } from './types'
 import apiClient from './client'
 
@@ -85,6 +86,14 @@ export async function startModelPreload(
  */
 export async function getModelPreloadStatus(): Promise<ModelPreloadStatusResponse> {
   const response = await apiClient.get<ModelPreloadStatusResponse>('/api/v1/models/preload/status')
+  return response.data
+}
+
+/**
+ * 获取引擎信息（可用引擎列表 + 运行环境版本信息）
+ */
+export async function getEnginesInfo(): Promise<EnginesResponse> {
+  const response = await apiClient.get('/api/v1/engines')
   return response.data
 }
 

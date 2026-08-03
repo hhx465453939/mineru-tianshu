@@ -18,9 +18,17 @@ MinerU Tianshu - Task Scheduler (Optional)
 
 import asyncio
 import aiohttp
-from loguru import logger
-from task_db import TaskDB
+import argparse
 import signal
+import sys
+import os
+from pathlib import Path
+from loguru import logger
+
+# 添加父目录到路径以确保能导入 task_db
+sys.path.insert(0, str(Path(__file__).parent))
+
+from task_db import TaskDB
 
 
 class TaskScheduler:
@@ -32,14 +40,11 @@ class TaskScheduler:
     2. 健康检查 Workers
     3. 故障恢复（重置超时任务）
     4. 收集和展示统计信息
-
-    职责（在传统模式下）：
-    1. 触发 Workers 拉取任务
     """
 
     def __init__(
         self,
-        litserve_url="http://localhost:28657/predict",
+        litserve_url="http://localhost:8001/predict",
         monitor_interval=300,
         health_check_interval=900,
         stale_task_timeout=60,
@@ -66,7 +71,14 @@ class TaskScheduler:
         self.cleanup_old_files_days = cleanup_old_files_days
         self.cleanup_old_records_days = cleanup_old_records_days
         self.worker_auto_mode = worker_auto_mode
-        self.db = TaskDB()
+
+        # 初始化数据库连接
+        db_path = os.getenv("DATABASE_PATH")
+        if db_path:
+            self.db = TaskDB(db_path)
+        else:
+            self.db = TaskDB()
+
         self.running = True
 
     async def check_worker_health(self, session: aiohttp.ClientSession):
@@ -74,15 +86,24 @@ class TaskScheduler:
         检查 worker 健康状态
         """
         try:
-            async with session.post(
-                self.litserve_url, json={"action": "health"}, timeout=aiohttp.ClientTimeout(total=10)
-            ) as resp:
+            # 使用 /health 端点通常比 /predict 更轻量
+            health_url = self.litserve_url.replace("/predict", "/health")
+            async with session.get(health_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status == 200:
-                    result = await resp.json()
-                    return result
+                    try:
+                        return await resp.json()
+                    except Exception:
+                        return {"status": "ok", "raw": await resp.text()}
                 else:
-                    logger.error(f"Health check failed with status {resp.status}")
-                    return None
+                    # 如果 /health 不存在，尝试 POST /predict
+                    async with session.post(
+                        self.litserve_url, json={"action": "health"}, timeout=aiohttp.ClientTimeout(total=10)
+                    ) as predict_resp:
+                        if predict_resp.status == 200:
+                            return await predict_resp.json()
+                        else:
+                            logger.error(f"Health check failed with status {predict_resp.status}")
+                            return None
 
         except asyncio.TimeoutError:
             logger.warning("Health check timeout")
@@ -96,19 +117,12 @@ class TaskScheduler:
         主监控循环
         """
         logger.info("🔄 Task scheduler started")
-        logger.info(f"   LitServe URL: {self.litserve_url}")
-        logger.info(f"   Worker Mode: {'Auto-Loop' if self.worker_auto_mode else 'Scheduler-Driven'}")
-        logger.info(f"   Monitor Interval: {self.monitor_interval}s")
-        logger.info(f"   Health Check Interval: {self.health_check_interval}s")
-        logger.info(f"   Stale Task Timeout: {self.stale_task_timeout}m")
-        if self.cleanup_old_files_days > 0:
-            logger.info(f"   Cleanup Old Files: {self.cleanup_old_files_days} days")
-        else:
-            logger.info("   Cleanup Old Files: Disabled")
-        if self.cleanup_old_records_days > 0:
-            logger.info(f"   Cleanup Old Records: {self.cleanup_old_records_days} days (Not Recommended)")
-        else:
-            logger.info("   Cleanup Old Records: Disabled (Keep Forever)")
+        logger.info(f"    LitServe URL: {self.litserve_url}")
+        logger.info(f"    Worker Mode: {'Auto-Loop' if self.worker_auto_mode else 'Scheduler-Driven'}")
+        logger.info(f"    Monitor Interval: {self.monitor_interval}s")
+        logger.info(f"    Health Check Interval: {self.health_check_interval}s")
+        logger.info(f"    Stale Task Timeout: {self.stale_task_timeout}m")
+        logger.info(f"    Cleanup Old Files: {self.cleanup_old_files_days} days")
 
         health_check_counter = 0
         stale_task_counter = 0
@@ -118,17 +132,20 @@ class TaskScheduler:
             while self.running:
                 try:
                     # 1. 监控队列状态
-                    stats = self.db.get_queue_stats()
-                    pending_count = stats.get("pending", 0)
-                    processing_count = stats.get("processing", 0)
-                    completed_count = stats.get("completed", 0)
-                    failed_count = stats.get("failed", 0)
+                    try:
+                        stats = self.db.get_queue_stats()
+                        pending_count = stats.get("pending", 0)
+                        processing_count = stats.get("processing", 0)
+                        completed_count = stats.get("completed", 0)
+                        failed_count = stats.get("failed", 0)
 
-                    if pending_count > 0 or processing_count > 0:
-                        logger.info(
-                            f"📊 Queue: {pending_count} pending, {processing_count} processing, "
-                            f"{completed_count} completed, {failed_count} failed"
-                        )
+                        if pending_count > 0 or processing_count > 0:
+                            logger.info(
+                                f"📊 Queue: {pending_count} pending, {processing_count} processing, "
+                                f"{completed_count} completed, {failed_count} failed"
+                            )
+                    except Exception as e:
+                        logger.error(f"Failed to get queue stats: {e}")
 
                     # 2. 定期健康检查
                     health_check_counter += 1
@@ -137,7 +154,7 @@ class TaskScheduler:
                         logger.info("🏥 Performing health check...")
                         health_result = await self.check_worker_health(session)
                         if health_result:
-                            logger.info(f"✅ Workers healthy: {health_result}")
+                            logger.info(f"✅ Workers healthy: {health_result.get('status', 'ok')}")
                         else:
                             logger.warning("⚠️  Workers health check failed")
 
@@ -145,29 +162,29 @@ class TaskScheduler:
                     stale_task_counter += 1
                     if stale_task_counter * self.monitor_interval >= self.stale_task_timeout * 60:
                         stale_task_counter = 0
-                        reset_count = self.db.reset_stale_tasks(self.stale_task_timeout)
-                        if reset_count > 0:
-                            logger.warning(f"⚠️  Reset {reset_count} stale tasks (timeout: {self.stale_task_timeout}m)")
+                        try:
+                            reset_count = self.db.reset_stale_tasks(self.stale_task_timeout)
+                            if reset_count > 0:
+                                logger.warning(
+                                    f"⚠️  Reset {reset_count} stale tasks (timeout: {self.stale_task_timeout}m)"
+                                )
+                        except Exception as e:
+                            logger.error(f"Failed to reset stale tasks: {e}")
 
-                    # 4. 定期清理旧任务文件和记录
+                    # 4. 定期清理旧任务文件
                     cleanup_counter += 1
-                    # 每24小时清理一次（基于当前监控间隔计算）
-                    cleanup_interval_cycles = (24 * 3600) / self.monitor_interval
+                    # 每24小时清理一次
+                    cleanup_interval_cycles = (24 * 3600) / max(1, self.monitor_interval)
                     if cleanup_counter >= cleanup_interval_cycles:
                         cleanup_counter = 0
-
-                        # 清理旧任务（删除文件和记录）
                         if self.cleanup_old_files_days > 0:
-                            logger.info(f"🧹 Cleaning up tasks older than {self.cleanup_old_files_days} days...")
-                            record_count = self.db.cleanup_old_task_records(days=self.cleanup_old_files_days)
-                            if record_count > 0:
-                                logger.info(f"✅ Cleaned up {record_count} old tasks (files and records)")
-
-                        # 注：cleanup_old_records_days 已废弃，统一使用 cleanup_old_files_days
-                        if self.cleanup_old_records_days > 0:
-                            logger.warning(
-                                "⚠️  cleanup_old_records_days is deprecated, use cleanup_old_files_days instead"
-                            )
+                            try:
+                                logger.info(f"🧹 Cleaning up tasks older than {self.cleanup_old_files_days} days...")
+                                record_count = self.db.cleanup_old_task_records(days=self.cleanup_old_files_days)
+                                if record_count > 0:
+                                    logger.info(f"✅ Cleaned up {record_count} old tasks")
+                            except Exception as e:
+                                logger.error(f"Failed to cleanup old tasks: {e}")
 
                     # 等待下一次监控
                     await asyncio.sleep(self.monitor_interval)
@@ -197,17 +214,6 @@ class TaskScheduler:
         """停止调度器"""
         self.running = False
 
-    def cancel_task(self, task_id: str):
-        """
-        通知 worker 取消指定任务
-
-        Worker 在自动循环模式下会定期检查任务状态，
-        如果状态变为 cancelled，则中止处理。
-        """
-        logger.info(f"🛑 Cancel requested for task: {task_id}")
-        # Worker 通过自动循环检查 DB 状态，这里不需要额外操作
-        # 未来可以扩展为直接通知 worker 进程
-
 
 async def health_check(litserve_url: str) -> bool:
     """
@@ -215,22 +221,24 @@ async def health_check(litserve_url: str) -> bool:
     """
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(
-                litserve_url.replace("/predict", "/health"), timeout=aiohttp.ClientTimeout(total=5)
-            ) as resp:
+            health_url = litserve_url.replace("/predict", "/health")
+            async with session.get(health_url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                 return resp.status == 200
     except Exception:
         return False
 
 
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser(description="MinerU Tianshu Task Scheduler (Optional)")
-    parser.add_argument("--litserve-url", type=str, default="http://localhost:28657/predict", help="LitServe worker URL")
+
+    parser.add_argument("--litserve-url", type=str, default="http://localhost:8001/predict", help="LitServe worker URL")
+
+    # ✅ 修复：同时支持 --monitor-interval 和 --interval (兼容 docker-compose)
     parser.add_argument(
         "--monitor-interval", type=int, default=300, help="Monitor interval in seconds (default: 300s = 5 minutes)"
     )
+    parser.add_argument("--interval", type=int, dest="monitor_interval", help="Alias for --monitor-interval")
+
     parser.add_argument(
         "--health-check-interval",
         type=int,
@@ -246,11 +254,12 @@ if __name__ == "__main__":
         default=7,
         help="Delete result files older than N days (0=disable, default: 7)",
     )
+    # 兼容旧参数
     parser.add_argument(
         "--cleanup-old-records-days",
         type=int,
         default=0,
-        help="Delete DB records older than N days (0=disable, NOT recommended)",
+        help="Delete DB records older than N days (deprecated)",
     )
     parser.add_argument("--wait-for-workers", action="store_true", help="Wait for workers to be ready before starting")
     parser.add_argument("--no-worker-auto-mode", action="store_true", help="Disable worker auto-loop mode assumption")

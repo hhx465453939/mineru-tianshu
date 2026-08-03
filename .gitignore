@@ -51,9 +51,6 @@ logs/
 # Data directory
 data/
 
-# Cache directory
-cache/
-
 # Temporary files
 *.tmp
 *.bak
@@ -64,5 +61,16 @@ docker-images
 docker-images-cpu
 models-offline
 cpu-deployment
+
+# Windows deployment
+TianshuLauncher.spec
+winserver/
+tools/
 *.exe
-TianshuLauncher.exe
+proces*.ps1
+
+# Dev tooling
+.claude/
+.gemini/
+.codex/
+.codebuddy/

@@ -118,6 +118,10 @@
         </div>
         <p v-else class="text-sm text-gray-500">{{ $t('common.noData') }}</p>
       </div>
+
+    <!-- 引擎信息 -->
+    <div class="mb-6 lg:mb-8">
+      <EngineInfo />
     </div>
 
     <!-- 最近任务 -->
@@ -216,6 +220,7 @@ import {
 import StatCard from '@/components/StatCard.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import EngineInfo from '@/components/EngineInfo.vue'
 import {
   Clock,
   Loader,
