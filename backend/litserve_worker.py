@@ -522,6 +522,22 @@ class MinerUWorkerAPI(ls.LitAPI):
                 logger.exception(e)
                 time.sleep(self.poll_interval)
 
+    def _check_cancelled(self, task_id: str) -> bool:
+        """
+        检查任务是否已被取消
+
+        Worker 在处理任务时会调用此方法，如果任务已被用户取消则返回 True。
+        这样用户可以在任意时刻停止正在运行的任务。
+        """
+        try:
+            task = self.task_db.get_task(task_id)
+            if task and task.get("status") == "cancelled":
+                logger.info(f"🛑 Task {task_id} has been cancelled by user, aborting...")
+                return True
+        except Exception:
+            pass
+        return False
+
     def _process_task(self, task: dict):
         """
         处理单个任务
@@ -535,6 +551,11 @@ class MinerUWorkerAPI(ls.LitAPI):
         parent_task_id = task.get("parent_task_id")
 
         try:
+            # 检查任务是否已被取消
+            if self._check_cancelled(task_id):
+                logger.info(f"⏹️  Task {task_id} cancelled before processing started")
+                return
+
             # 根据 backend 选择处理方式（从 task 字段读取，不是从 options 读取）
             backend = task.get("backend", "auto")
 

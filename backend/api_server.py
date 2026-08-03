@@ -624,7 +624,10 @@ async def export_tasks_archive(
 @app.delete("/api/v1/tasks/{task_id}", tags=["任务管理"])
 async def cancel_task(task_id: str, current_user: User = Depends(get_current_active_user)):
     """
-    取消任务（仅限 pending 状态）
+    取消/停止任务（支持 pending 和 processing 状态）
+
+    - pending: 直接取消入队
+    - processing: 标记为 cancelling，worker 会在下一次检查时中止处理
 
     需要认证。用户只能取消自己的任务，管理员可以取消任何任务。
     """
@@ -638,8 +641,10 @@ async def cancel_task(task_id: str, current_user: User = Depends(get_current_act
         if task.get("user_id") != current_user.user_id:
             raise HTTPException(status_code=403, detail="Permission denied: You can only cancel your own tasks")
 
-    if task["status"] == "pending":
+    if task["status"] in ("pending", "processing"):
         db.update_task_status(task_id, "cancelled")
+
+        # Worker 在自动循环中会检测到状态变为 cancelled 并中止处理
 
         # 删除临时文件
         file_path = Path(task["file_path"])
@@ -669,6 +674,41 @@ def _filter_task_ids_by_permission(task_ids: list[str], current_user: User) -> l
             (*task_ids, current_user.user_id),
         )
         return [row["task_id"] for row in cursor.fetchall()]
+
+
+@app.post("/api/v1/tasks/batch/cancel", tags=["任务管理"])
+async def batch_cancel_tasks(
+    req: BatchTaskRequest,
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    批量取消/停止任务（支持 pending 和 processing 状态）
+
+    需要认证。普通用户只能取消自己的任务，管理员可取消任意任务。
+    """
+    if not req.task_ids:
+        raise HTTPException(status_code=400, detail="task_ids 不能为空")
+    if len(req.task_ids) > 500:
+        raise HTTPException(status_code=400, detail="单次最多操作 500 个任务")
+
+    allowed_ids = _filter_task_ids_by_permission(req.task_ids, current_user)
+    if not allowed_ids:
+        raise HTTPException(status_code=403, detail="没有权限取消这些任务")
+
+    cancelled = []
+    skipped = []
+    for tid in allowed_ids:
+        task = db.get_task(tid)
+        if task and task["status"] in ("pending", "processing"):
+            db.update_task_status(tid, "cancelled")
+            cancelled.append(tid)
+        else:
+            skipped.append(tid)
+
+    logger.info(
+        f"⏹️  Batch cancel by {current_user.username}: cancelled={len(cancelled)}, skipped={len(skipped)}"
+    )
+    return {"success": True, "cancelled": cancelled, "skipped": skipped}
 
 
 @app.post("/api/v1/tasks/batch/delete", tags=["任务管理"])

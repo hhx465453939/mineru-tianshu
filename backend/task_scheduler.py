@@ -197,6 +197,17 @@ class TaskScheduler:
         """停止调度器"""
         self.running = False
 
+    def cancel_task(self, task_id: str):
+        """
+        通知 worker 取消指定任务
+
+        Worker 在自动循环模式下会定期检查任务状态，
+        如果状态变为 cancelled，则中止处理。
+        """
+        logger.info(f"🛑 Cancel requested for task: {task_id}")
+        # Worker 通过自动循环检查 DB 状态，这里不需要额外操作
+        # 未来可以扩展为直接通知 worker 进程
+
 
 async def health_check(litserve_url: str) -> bool:
     """

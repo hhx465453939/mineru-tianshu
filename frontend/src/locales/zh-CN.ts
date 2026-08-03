@@ -104,6 +104,8 @@ export default {
     viewDetail: '查看详情',
     deleteTask: '删除任务',
     cancelTask: '取消任务',
+    stopTask: '停止任务',
+    batchStop: '批量停止',
     downloadResult: '下载结果',
     downloadMarkdown: '下载 Markdown',
     downloadJson: '下载 JSON',

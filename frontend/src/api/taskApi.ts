@@ -148,6 +148,16 @@ export async function downloadTasksArchive(taskIds: string[]): Promise<{ blob: B
 }
 
 /**
+ * 批量取消/停止任务（支持 pending 和 processing 状态）
+ */
+export async function batchCancelTasks(taskIds: string[]): Promise<ApiResponse> {
+  const response = await apiClient.post<ApiResponse>('/api/v1/tasks/batch/cancel', {
+    task_ids: taskIds,
+  })
+  return response.data
+}
+
+/**
  * 批量硬删除任务（数据库记录 + 上传文件 + 结果目录，不可恢复）
  */
 export async function batchDeleteTasks(taskIds: string[]): Promise<ApiResponse> {

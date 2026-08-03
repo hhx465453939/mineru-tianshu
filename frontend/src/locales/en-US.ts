@@ -104,6 +104,8 @@ export default {
     viewDetail: 'View Detail',
     deleteTask: 'Delete Task',
     cancelTask: 'Cancel Task',
+    stopTask: 'Stop Task',
+    batchStop: 'Batch Stop',
     downloadResult: 'Download Result',
     downloadMarkdown: 'Download Markdown',
     downloadJson: 'Download JSON',

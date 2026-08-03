@@ -135,9 +135,8 @@
                 <input
                   v-model="selectedTasks"
                   :value="task.task_id"
-                  :disabled="!['completed', 'failed', 'pending'].includes(task.status)"
                   type="checkbox"
-                  class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                  class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                 />
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
@@ -170,10 +169,10 @@
                     <Eye class="w-4 h-4" />
                   </router-link>
                   <button
-                    v-if="task.status === 'pending'"
+                    v-if="task.status === 'pending' || task.status === 'processing'"
                     @click="cancelTask(task.task_id)"
                     class="text-red-600 hover:text-red-700"
-                    :title="$t('common.cancel')"
+                    :title="task.status === 'processing' ? $t('task.stopTask') : $t('common.cancel')"
                   >
                     <X class="w-4 h-4" />
                   </button>
@@ -191,6 +190,15 @@
           <span v-if="selectedTasks.length > 0" class="text-sm text-gray-600">
             {{ $t('common.selected') }}: {{ selectedTasks.length }}
           </span>
+          <button
+            v-if="selectedCancellableIds.length > 0"
+            @click="askBatchCancel"
+            class="btn btn-sm flex items-center text-white bg-orange-500 hover:bg-orange-600"
+            :title="$t('task.batchStop')"
+          >
+            <X class="w-4 h-4 mr-1" />
+            {{ $t('task.batchStop') }} ({{ selectedCancellableIds.length }})
+          </button>
           <button
             v-if="selectedFailedIds.length > 0"
             @click="askBatchRestart"
@@ -304,6 +312,7 @@ import {
   ChevronRight,
   Trash2,
   RotateCcw,
+  StopCircle,
 } from 'lucide-vue-next'
 import type { TaskStatus, Backend } from '@/api/types'
 
@@ -403,16 +412,20 @@ const selectedCompletedTasks = computed(() =>
   selectedTasks.value.filter(id => tasks.value.find(task => task.task_id === id)?.status === 'completed')
 )
 const selectableTaskIdsOnPage = computed(() =>
-  paginatedTasks.value
-    .filter(task => ['completed', 'failed', 'pending'].includes(task.status))
-    .map(task => task.task_id)
+  paginatedTasks.value.map(task => task.task_id)
 )
-// 按状态分类的选中任务（用于批量删除/重启）
+// 按状态分类的选中任务（用于批量删除/重启/停止）
 const selectedFailedIds = computed(() =>
   selectedTasks.value.filter(id => tasks.value.find(t => t.task_id === id)?.status === 'failed')
 )
 const selectedPendingIds = computed(() =>
   selectedTasks.value.filter(id => tasks.value.find(t => t.task_id === id)?.status === 'pending')
+)
+const selectedCancellableIds = computed(() =>
+  selectedTasks.value.filter(id => {
+    const task = tasks.value.find(t => t.task_id === id)
+    return task && (task.status === 'pending' || task.status === 'processing')
+  })
 )
 
 function toggleSelectAll() {
@@ -433,7 +446,12 @@ const taskToCancel = ref<string | string[]>('')
 
 async function cancelTask(taskId: string) {
   taskToCancel.value = taskId
-  cancelDialogMessage.value = '确定要取消这个任务吗？'
+  const task = tasks.value.find(t => t.task_id === taskId)
+  if (task?.status === 'processing') {
+    cancelDialogMessage.value = '确定要停止这个正在处理的任务吗？'
+  } else {
+    cancelDialogMessage.value = '确定要取消这个任务吗？'
+  }
   showCancelDialog.value = true
 }
 
@@ -538,10 +556,10 @@ async function confirmCancel() {
   await refreshTasks()
 }
 
-// 批量删除/重启
+// 批量删除/重启/停止
 const showBatchDialog = ref(false)
 const batchDialogMessage = ref('')
-const pendingBatchAction = ref<{ type: 'delete' | 'restart'; ids: string[] } | null>(null)
+const pendingBatchAction = ref<{ type: 'delete' | 'restart' | 'cancel'; ids: string[] } | null>(null)
 
 function askBatchDelete() {
   const ids = [...selectedTasks.value]
@@ -559,12 +577,22 @@ function askBatchRestart() {
   showBatchDialog.value = true
 }
 
+function askBatchCancel() {
+  const ids = selectedCancellableIds.value
+  if (ids.length === 0) return
+  pendingBatchAction.value = { type: 'cancel', ids }
+  batchDialogMessage.value = `确定要停止/取消选中的 ${ids.length} 个任务吗？正在处理中的任务将被中止。`
+  showBatchDialog.value = true
+}
+
 async function confirmBatchAction() {
   const action = pendingBatchAction.value
   if (!action) return
   try {
     if (action.type === 'delete') {
       await taskApi.batchDeleteTasks(action.ids)
+    } else if (action.type === 'cancel') {
+      await taskApi.batchCancelTasks(action.ids)
     } else {
       await taskApi.batchRestartTasks(action.ids)
     }
@@ -609,8 +637,9 @@ watch([paginatedTasks, selectedTasks], () => {
 })
 
 watch(tasks, () => {
-  const completedTaskIds = new Set(tasks.value.filter(task => task.status === 'completed').map(task => task.task_id))
-  selectedTasks.value = selectedTasks.value.filter(id => completedTaskIds.has(id))
+  // 保留仍然存在于任务列表中的选中项（不限状态）
+  const existingTaskIds = new Set(tasks.value.map(task => task.task_id))
+  selectedTasks.value = selectedTasks.value.filter(id => existingTaskIds.has(id))
 })
 
 onMounted(async () => {
