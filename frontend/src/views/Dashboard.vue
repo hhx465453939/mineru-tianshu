@@ -118,6 +118,7 @@
         </div>
         <p v-else class="text-sm text-gray-500">{{ $t('common.noData') }}</p>
       </div>
+    </div>
 
     <!-- 引擎信息 -->
     <div class="mb-6 lg:mb-8">
