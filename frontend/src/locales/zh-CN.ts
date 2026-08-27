@@ -124,7 +124,6 @@ export default {
     confirmBatchDelete: '确定要永久删除 {count} 个任务吗？此操作不可恢复。',
     batchRestart: '批量重启',
     confirmBatchRestart: '确定要重启 {count} 个任务吗？',
-    batchDownloadArchive: '打包下载完整结果',
     pageSize: '每页条数',
     downloadAsArchiveWithAssets: '打包压缩（含完整目录与图片）',
     submitTask: '提交任务',

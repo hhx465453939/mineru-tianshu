@@ -1062,6 +1062,18 @@ def start_litserve_workers(
     if accelerator == "auto":
         accelerator = resolve_auto_accelerator()
 
+    # [修复] 规范化 devices 参数：litserve 的 cuda/mps 模式要求 int 或 int 列表。
+    # CUDA_VISIBLE_DEVICES 或 --devices 传入的字符串（如 "0"、"0,1"）必须转为 int / list[int]，
+    # 否则 litserve._Connector.check_devices_and_accelerators 会抛 ValueError。
+    if isinstance(devices, str) and devices != "auto":
+        try:
+            parts = [p.strip() for p in devices.split(",") if p.strip()]
+            devices = int(parts[0]) if len(parts) == 1 else [int(p) for p in parts]
+            logger.info(f"🔢 Normalized devices: {devices} (type: {type(devices).__name__})")
+        except (ValueError, IndexError):
+            logger.warning(f"⚠️  Invalid devices value: {devices!r}, falling back to 'auto'")
+            devices = "auto"
+
     logger.info(f"🚀 Starting Worker | Acc: {accelerator} | Devices: {devices} | Out: {output_dir}")
 
     api = MinerUWorkerAPI(

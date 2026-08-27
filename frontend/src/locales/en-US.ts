@@ -124,7 +124,6 @@ export default {
     confirmBatchDelete: 'Are you sure you want to permanently delete {count} task(s)? This cannot be undone.',
     batchRestart: 'Batch Restart',
     confirmBatchRestart: 'Are you sure you want to restart {count} task(s)?',
-    batchDownloadArchive: 'Download Full Archive',
     pageSize: 'Per Page',
     downloadAsArchiveWithAssets: 'Archive with full outputs/images',
     submitTask: 'Submit Task',
