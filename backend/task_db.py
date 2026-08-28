@@ -50,16 +50,20 @@ class TaskDB:
             project_root = Path(__file__).parent.parent
             default_db = project_root / "data" / "db" / "mineru_tianshu.db"
             db_path = os.getenv("DATABASE_PATH", str(default_db))
-            # Windows 本地：.env 中 Docker 路径 /app/... 会解析为 E:\app\...，目录往往不存在
-            if os.name == "nt" and db_path.replace("\\", "/").strip().startswith("/app/"):
-                db_path = str(default_db)
-            # 确保父目录存在
-            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-            # 确保使用绝对路径
-            db_path = str(Path(db_path).resolve())
         else:
-            # 确保使用绝对路径
-            db_path = str(Path(db_path).resolve())
+            default_db = None
+
+        # Windows 本地：.env 中 Docker 路径 /app/... 会解析为 E:\app\...，目录往往不存在。
+        # 注意：此防护必须同时覆盖显式传入的路径（如 task_scheduler 从环境变量读取后传入），
+        # 否则 sqlite3.connect 会因父目录不存在抛 "unable to open database file"。
+        if os.name == "nt" and str(db_path).replace("\\", "/").strip().startswith("/app/"):
+            if default_db is None:
+                project_root = Path(__file__).parent.parent
+                default_db = project_root / "data" / "db" / "mineru_tianshu.db"
+            db_path = default_db
+
+        # 确保父目录存在
+        Path(str(db_path)).parent.mkdir(parents=True, exist_ok=True)
 
         # 确保 db_path 是绝对路径字符串
         self.db_path = str(Path(db_path).resolve())
