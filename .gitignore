@@ -74,3 +74,4 @@ proces*.ps1
 .gemini/
 .codex/
 .codebuddy/
+/input
