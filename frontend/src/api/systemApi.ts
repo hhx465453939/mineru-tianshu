@@ -17,6 +17,16 @@ export interface ModelStatusItem {
   message: string
 }
 
+/** 跨平台预下载命令（后端按服务器平台生成） */
+export interface ModelDownloadCommand {
+  id: string
+  label: string
+  platform: string
+  command: string
+  fallback: string
+  note: string
+}
+
 /** 模型状态接口响应 */
 export interface ModelsStatusResponse {
   success: boolean
@@ -31,6 +41,10 @@ export interface ModelsStatusResponse {
   any_ready: boolean
   any_missing: boolean
   first_use_tip: string
+  /** 服务器运行平台：win32 / darwin / linux */
+  server_platform?: string
+  /** 各平台预下载命令列表 */
+  download_commands?: ModelDownloadCommand[]
   timestamp: string
 }
 

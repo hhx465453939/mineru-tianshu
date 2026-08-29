@@ -22,6 +22,42 @@
           <XCircle class="h-5 w-5" />
         </button>
       </div>
+
+      <!-- 跨平台预下载命令 -->
+      <div v-if="downloadCommands.length" class="mt-3">
+        <div class="mb-2 flex flex-wrap items-center gap-1.5">
+          <button
+            v-for="cmd in downloadCommands"
+            :key="cmd.id"
+            type="button"
+            @click="activeCommandId = cmd.id"
+            :class="
+              activeCommandId === cmd.id
+                ? 'bg-amber-600 text-white'
+                : 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:hover:bg-amber-900/60'
+            "
+            class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
+          >
+            {{ cmd.label }}
+          </button>
+        </div>
+        <div class="relative rounded-md bg-gray-900 px-3 py-2.5 pr-12 font-mono text-xs text-green-400 dark:bg-gray-950">
+          <code class="block break-all whitespace-pre-wrap">{{ activeCommand?.command }}</code>
+          <button
+            type="button"
+            :title="$t('common.copy')"
+            class="absolute top-2 right-2 rounded p-1 text-gray-400 hover:bg-gray-700 hover:text-gray-100"
+            @click="copyActiveCommand"
+          >
+            <Check v-if="copied" class="h-4 w-4 text-green-400" />
+            <Copy v-else class="h-4 w-4" />
+          </button>
+        </div>
+        <p class="mt-1.5 text-xs text-amber-700 dark:text-amber-400">
+          未配置 .venv 虚拟环境时，可安装依赖后执行：
+          <code class="break-all font-mono">{{ activeCommand?.fallback }}</code>
+        </p>
+      </div>
     </div>
 
     <!-- 队列统计卡片 -->
@@ -234,6 +270,8 @@ import {
   FileText,
   Eye,
   FileQuestion,
+  Copy,
+  Check,
 } from 'lucide-vue-next'
 
 const taskStore = useTaskStore()
@@ -246,6 +284,51 @@ const dismissModelTip = ref(false)
 const preloadStatus = ref<ModelPreloadStatusResponse | null>(null)
 const preloadStarting = ref(false)
 let preloadTimer: number | null = null
+
+// ---- 跨平台预下载命令 ----
+const activeCommandId = ref('')
+const copied = ref(false)
+const downloadCommands = computed(() => modelsStatus.value?.download_commands ?? [])
+const activeCommand = computed(
+  () => downloadCommands.value.find((c) => c.id === activeCommandId.value) ?? downloadCommands.value[0]
+)
+
+/** 根据服务器/浏览器平台选择默认命令 */
+function resolveDefaultCommandId(): string {
+  const cmds = downloadCommands.value
+  if (!cmds.length) return ''
+  const server = modelsStatus.value?.server_platform ?? ''
+  if (server) {
+    const hit = cmds.find((c) => server === c.platform || server.startsWith(c.platform))
+    if (hit) return hit.id
+  }
+  const nav = String((navigator as any).userAgentData?.platform ?? navigator.platform ?? '').toLowerCase()
+  let platform = 'linux'
+  if (nav.includes('win')) platform = 'win32'
+  else if (nav.includes('mac')) platform = 'darwin'
+  const hit = cmds.find((c) => c.platform === platform)
+  return hit?.id ?? cmds[0].id
+}
+
+/** 复制当前命令到剪贴板（兼容非 HTTPS 环境） */
+async function copyActiveCommand() {
+  const cmd = activeCommand.value
+  if (!cmd) return
+  try {
+    await navigator.clipboard.writeText(cmd.command)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = cmd.command
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+  copied.value = true
+  window.setTimeout(() => (copied.value = false), 2000)
+}
 
 // 计算最近的任务（最多显示10个）
 const recentTasks = computed(() => {
@@ -260,7 +343,10 @@ async function loadModelsStatus() {
   modelsStatusLoading.value = true
   try {
     const res = await getModelsStatus()
-    if (res.success) modelsStatus.value = res
+    if (res.success) {
+      modelsStatus.value = res
+      activeCommandId.value = resolveDefaultCommandId()
+    }
   } catch {
     modelsStatus.value = null
   } finally {

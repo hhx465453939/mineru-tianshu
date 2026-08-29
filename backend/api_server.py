@@ -11,6 +11,7 @@ MinerU Tianshu - API Server
 import json
 import os
 import re
+import sys
 import subprocess
 import tempfile
 import threading
@@ -1273,6 +1274,62 @@ def _model_catalog():
     ]
 
 
+def _model_download_commands() -> list:
+    """构建跨平台手动预下载命令（下载到项目根目录 models-offline）。
+
+    优先使用项目自带 .venv 虚拟环境（backend/.venv），
+    未检测到虚拟环境时返回系统 python 的 fallback 命令。
+    """
+    backend_dir = Path(__file__).resolve().parent
+    venv_win = backend_dir / ".venv" / "Scripts" / "python.exe"
+    venv_unix = backend_dir / ".venv" / "bin" / "python"
+    has_venv_win = venv_win.exists()
+    has_venv_unix = venv_unix.exists()
+
+    def _win(powershell: bool) -> str:
+        sep = "; " if powershell else " && "
+        venv = r"..\.venv\Scripts\python.exe" if has_venv_win else None
+        if venv:
+            cmd = f"cd backend{sep}{venv} download_models.py --output ..\\models-offline"
+        else:
+            cmd = f"cd backend{sep}python download_models.py --output ..\\models-offline"
+        return cmd
+
+    def _unix() -> str:
+        venv = "../.venv/bin/python" if has_venv_unix else None
+        if venv:
+            return f"cd backend && {venv} download_models.py --output ../models-offline"
+        return "cd backend && python3 download_models.py --output ../models-offline"
+
+    commands = [
+        {
+            "id": "windows",
+            "label": "Windows",
+            "platform": "win32",
+            "command": _win(True),
+            "fallback": "cd backend && python download_models.py --output ..\\models-offline",
+            "note": "适用于 PowerShell / CMD",
+        },
+        {
+            "id": "macos",
+            "label": "macOS",
+            "platform": "darwin",
+            "command": _unix(),
+            "fallback": "cd backend && python3 download_models.py --output ../models-offline",
+            "note": "适用于 Terminal",
+        },
+        {
+            "id": "linux",
+            "label": "Linux",
+            "platform": "linux",
+            "command": _unix(),
+            "fallback": "cd backend && python3 download_models.py --output ../models-offline",
+            "note": "适用于 Bash / Zsh",
+        },
+    ]
+    return commands
+
+
 def _append_model_preload_log(line: str):
     with _model_preload_lock:
         MODEL_PRELOAD_STATE["logs"].append(line.rstrip())
@@ -1379,7 +1436,9 @@ async def get_models_status():
         "catalog": _model_catalog(),
         "any_ready": any_ready,
         "any_missing": any_missing,
-        "first_use_tip": "部分模型将在首次使用时自动下载，请保持网络畅通。预下载命令：cd backend && python download_models.py --output ../models-offline；或在项目根目录执行 python backend/download_models.py --output ./models-offline。",
+        "first_use_tip": "部分模型将在首次使用时自动下载，请保持网络畅通。如需手动预下载（推荐，可提前缓存全部模型），请在项目根目录打开终端，选择下方对应平台复制命令执行。",
+        "server_platform": sys.platform,
+        "download_commands": _model_download_commands(),
         "timestamp": datetime.now().isoformat(),
     }
 
