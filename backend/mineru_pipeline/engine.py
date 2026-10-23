@@ -128,6 +128,83 @@ class MinerUPipelineEngine:
                 logger.error(f"❌ Error loading MinerU pipeline: {e}")
                 raise
 
+    # =========================================================
+    # Backend 能力探测
+    # =========================================================
+    # MinerU 2.x 实际实现了哪些 backend：pipeline / vlm-transformers /
+    # vlm-vllm-engine / vlm-http-client。hybrid-* 和 *-auto-engine 是 3.x 的
+    # 命名，2.x 会原样透传给 mineru_vl_utils 并抛
+    # `ValueError: Unsupported backend: xxx`。
+    _MINERU_V2_BACKENDS = {"pipeline", "vlm-transformers", "vlm-vllm-engine", "vlm-http-client"}
+    _MINERU_V3_BACKENDS = _MINERU_V2_BACKENDS | {
+        "vlm-auto-engine",
+        "hybrid-auto-engine",
+        "hybrid-http-client",
+    }
+
+    @staticmethod
+    def _mineru_version() -> tuple:
+        """读取运行环境里 mineru 的真实版本，失败时按 0.0.0 处理。"""
+        try:
+            import importlib.metadata as importlib_metadata
+
+            raw = importlib_metadata.version("mineru")
+        except Exception:
+            return (0, 0, 0)
+
+        parts = []
+        for chunk in raw.split("."):
+            digits = "".join(ch for ch in chunk if ch.isdigit())
+            parts.append(int(digits) if digits else 0)
+        while len(parts) < 3:
+            parts.append(0)
+        return tuple(parts[:3])
+
+    def _resolve_backend(self, requested: str, server_url: Optional[str]) -> tuple:
+        """
+        把前端请求的 backend 映射为当前环境真正可执行的 backend。
+
+        Returns:
+            (effective_backend, notice)  notice 为 None 表示未发生降级。
+        """
+        requested = (requested or "pipeline").strip()
+        version = self._mineru_version()
+        version_text = ".".join(str(x) for x in version)
+        is_v3 = version >= (3, 0, 0)
+        has_vlm_service = bool(server_url or self.vlm_api_base)
+
+        # ---- MinerU 3.x：原生支持 auto-engine / hybrid 命名 ----
+        if is_v3:
+            if requested in self._MINERU_V3_BACKENDS:
+                if requested.endswith("http-client") and not has_vlm_service:
+                    return "pipeline", "未配置 VLM 服务，已降级为 Pipeline"
+                return requested, None
+            return "pipeline", f"未知引擎 {requested}，已降级为 Pipeline"
+
+        # ---- MinerU 2.x ----
+        if requested == "pipeline":
+            return "pipeline", None
+
+        if requested in ("vlm-transformers", "vlm-vllm-engine"):
+            return requested, None
+
+        if requested == "vlm-http-client":
+            if not has_vlm_service:
+                return "pipeline", "vlm-http-client 需要 VLM 服务地址，未配置，已降级为 Pipeline"
+            return requested, None
+
+        if requested in ("vlm-auto-engine", "hybrid-auto-engine", "hybrid-http-client"):
+            if has_vlm_service:
+                return "vlm-http-client", (
+                    f"MinerU {version_text} 未实现 {requested}，已改用本地 VLM 服务（vlm-http-client）"
+                )
+            return "pipeline", (
+                f"MinerU {version_text} 不支持 {requested} 且未配置 VLM 服务，"
+                "已自动降级为 Pipeline（可正常出结果，精度低于 Hybrid）"
+            )
+
+        return "pipeline", f"未知引擎 {requested}，已降级为 Pipeline"
+
     def _wait_for_server(self, server_url: str, timeout: int = 60) -> bool:
         """等待 VLLM 服务就绪"""
         base_url = server_url.rstrip("/")
@@ -239,24 +316,21 @@ class MinerUPipelineEngine:
             file_path_obj = Path(file_path)
             file_ext = file_path_obj.suffix.lower()
 
-            # 1. 确定 Backend
-            user_backend = options.get("parse_mode", "pipeline")
-            if user_backend == "auto":
-                user_backend = "pipeline"
+            # 1. 确定 Backend（能力探测 + 安全降级）
+            requested_backend = options.get("parse_mode", "pipeline")
+            if requested_backend == "auto":
+                requested_backend = "pipeline"
 
-            backend = user_backend
             server_url = options.get("server_url")
+            backend, backend_notice = self._resolve_backend(requested_backend, server_url)
 
-            # 智能切换 VLLM
-            if not server_url and self.vlm_api_base:
-                if user_backend == "vlm-auto-engine":
-                    backend = "vlm-http-client"
-                    server_url = self.vlm_api_base.replace("/v1", "")
-                    logger.info(f"🔄 [Accelerate] Switching to {backend} using local vLLM")
-                elif user_backend == "hybrid-auto-engine":
-                    backend = "hybrid-http-client"
-                    server_url = self.vlm_api_base.replace("/v1", "")
-                    logger.info(f"🔄 [Accelerate] Switching to {backend} using local vLLM")
+            # 本地 vLLM 服务可用时补齐 server_url
+            if backend.endswith("http-client") and not server_url and self.vlm_api_base:
+                server_url = self.vlm_api_base.replace("/v1", "")
+                logger.info(f"🔄 [Accelerate] Using local vLLM -> {backend}")
+
+            if backend_notice:
+                logger.warning(f"⚠️  Backend fallback: {requested_backend} -> {backend} ({backend_notice})")
 
             # 服务健康检查
             if "http-client" in backend and server_url:
@@ -446,6 +520,10 @@ class MinerUPipelineEngine:
                     "markdown_file": final_md_path,
                     "json_path": final_json_path,
                     "json_content": json_content,
+                    # 实际生效的引擎与降级说明，供任务详情页展示
+                    "requested_backend": requested_backend,
+                    "effective_backend": backend,
+                    "backend_notice": backend_notice,
                 }
 
         except Exception as e:

@@ -554,6 +554,10 @@ class MinerUWorkerAPI(ls.LitAPI):
                         "json_content": result.get("json_content"),  # 关键：供前端右侧布局渲染使用
                         "markdown": result.get("content"),
                         "markdown_file": result.get("markdown_file"),
+                        # 引擎实际生效情况，供详情页展示降级提示
+                        "requested_backend": result.get("requested_backend", backend),
+                        "effective_backend": result.get("effective_backend"),
+                        "backend_notice": result.get("backend_notice"),
                     }
                 ),
             )
@@ -659,6 +663,10 @@ class MinerUWorkerAPI(ls.LitAPI):
             "json_content": result.get("json_content"),
             "pdf_path": pdf_path,  # 返回给前端
             "markdown_file": result.get("markdown_file"),
+            # 实际生效引擎与降级说明（MinerU 2.x 不支持 hybrid-* 时会降级）
+            "requested_backend": result.get("requested_backend"),
+            "effective_backend": result.get("effective_backend"),
+            "backend_notice": result.get("backend_notice"),
         }
 
     def _process_with_paddleocr_vl(self, file_path: str, options: dict) -> dict:

@@ -279,6 +279,12 @@ export interface Task {
     json_content?: any
     json_available?: boolean
     pdf_path?: string
+    /** 用户请求的引擎（可能被降级） */
+    requested_backend?: string
+    /** 实际生效的引擎 */
+    effective_backend?: string
+    /** 降级原因，仅发生降级时存在 */
+    backend_notice?: string | null
   } | null
 }
 
@@ -350,6 +356,12 @@ export interface EngineItem {
   version?: string
   description?: string
   supported_formats: string[]
+  /** 当前运行环境是否真正支持该引擎（后端能力探测结果） */
+  available?: boolean
+  /** 不可用时实际会降级到的引擎 */
+  effective_backend?: string
+  /** 不可用人话原因 */
+  unavailable_reason?: string | null
 }
 
 export interface EngineSystemInfo {

@@ -40,6 +40,19 @@
     </div>
 
     <div v-if="loading && !task" class="flex-1 flex items-center justify-center"><LoadingSpinner size="lg" text="加载中..." /></div>
+    <!-- 引擎降级提示：请求的引擎在当前环境不可用（如 mineru 2.x 不支持 hybrid） -->
+    <div
+      v-if="task?.data?.backend_notice"
+      class="mx-1 mb-3 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg flex items-start text-sm text-amber-800"
+    >
+      <AlertCircle class="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
+      <span>
+        <span class="font-semibold">引擎降级：</span>{{ task.data.backend_notice }}
+        <template v-if="task.data.effective_backend">
+          <span class="ml-1 font-mono text-xs bg-amber-100 px-1.5 py-0.5 rounded">{{ task.data.effective_backend }}</span>
+        </template>
+      </span>
+    </div>
     <div v-else-if="error" class="card bg-red-50 border-red-200 mx-1 p-4 mb-4"><div class="flex items-center text-red-800"><AlertCircle class="w-6 h-6 mr-3" /> {{ error }}</div></div>
 
     <div v-else-if="task" class="flex-1 min-h-0 relative">

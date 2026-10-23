@@ -248,10 +248,14 @@ export const useTaskStore = defineStore('task', () => {
 
   /**
    * 批量硬删除任务
+   * @param idsOverride 显式传入的任务 ID 列表（组件本地选择态），
+   *                    不传则回落到 store 内的 selectedTaskIds
    */
-  async function storeBatchDeleteTasks() {
-    const ids = [...selectedTaskIds.value]
-    if (ids.length === 0) return
+  async function storeBatchDeleteTasks(idsOverride?: string[]) {
+    const ids = idsOverride && idsOverride.length > 0 ? [...idsOverride] : [...selectedTaskIds.value]
+    if (ids.length === 0) {
+      return { success: false, deleted: [], failed: [], skipped: true }
+    }
     try {
       const res = await batchDeleteTasks(ids)
       // 从本地列表移除
@@ -267,10 +271,13 @@ export const useTaskStore = defineStore('task', () => {
 
   /**
    * 批量重启任务
+   * @param idsOverride 显式传入的任务 ID 列表，不传则回落 store 选择态
    */
-  async function storeBatchRestartTasks() {
-    const ids = [...selectedTaskIds.value]
-    if (ids.length === 0) return
+  async function storeBatchRestartTasks(idsOverride?: string[]) {
+    const ids = idsOverride && idsOverride.length > 0 ? [...idsOverride] : [...selectedTaskIds.value]
+    if (ids.length === 0) {
+      return { success: false, restarted: [], skipped: [], failed: [], skippedAll: true }
+    }
     try {
       const res = await batchRestartTasks(ids)
       // 更新本地状态为 pending

@@ -2,6 +2,7 @@
  * API 客户端配置
  */
 import axios, { AxiosInstance } from 'axios'
+import { toast } from '@/utils/toast'
 
 /**
  * 获取 API Base URL
@@ -115,6 +116,8 @@ apiClient.interceptors.response.use(
       // 403 权限不足
       if (error.response.status === 403) {
         console.error('Permission denied:', error.response.data.detail)
+        const detail = error.response.data?.detail
+        toast.error(typeof detail === 'string' && detail ? detail : '权限不足，操作被拒绝')
       }
     } else if (error.request) {
       // 请求发送但没有响应

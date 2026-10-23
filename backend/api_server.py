@@ -1088,6 +1088,34 @@ async def list_engines():
     mineru_ver = system_info["packages"]["mineru"]
     paddleocr_ver = system_info["packages"]["paddleocr"]
 
+    # ── 引擎能力探测（与 worker 内 MinerUPipelineEngine._resolve_backend 保持一致）──
+    def _parse_version(raw: str) -> tuple:
+        parts = []
+        for chunk in str(raw).split("."):
+            digits = "".join(ch for ch in chunk if ch.isdigit())
+            parts.append(int(digits) if digits else 0)
+        while len(parts) < 3:
+            parts.append(0)
+        return tuple(parts[:3])
+
+    mineru_version_tuple = _parse_version(mineru_ver)
+    mineru_supports_hybrid = mineru_version_tuple >= (3, 0, 0)
+
+    def _engine_availability(name: str) -> dict:
+        """返回引擎在当前安装环境中的真实可用性（不再谎报）。"""
+        if name == "pipeline":
+            return {"available": True, "effective_backend": "pipeline", "unavailable_reason": None}
+        if mineru_supports_hybrid:
+            return {"available": True, "effective_backend": name, "unavailable_reason": None}
+        if name == "hybrid-auto-engine":
+            reason = f"Hybrid 模式需要 MinerU 3.x，当前为 {mineru_ver}，提交后会自动降级为 Pipeline"
+        else:
+            reason = (
+                f"当前 MinerU {mineru_ver} 仅支持 pipeline / vlm-http-client 等后端，"
+                "提交后会自动降级为 Pipeline"
+            )
+        return {"available": False, "effective_backend": "pipeline", "unavailable_reason": reason}
+
     engines = {
         "document": [
             {
@@ -1096,6 +1124,7 @@ async def list_engines():
                 "version": mineru_ver,
                 "description": "基于 PDF-Extract-Kit 的传统多模型管道，速度快，无幻觉，适合大多数文档。",
                 "supported_formats": [".pdf", ".png", ".jpg", ".jpeg", ".docx"],
+                **_engine_availability("pipeline"),
             },
             {
                 "name": "vlm-auto-engine",
@@ -1103,6 +1132,7 @@ async def list_engines():
                 "version": mineru_ver,
                 "description": "基于 MinerU 3.X (1.2B) 视觉模型，擅长处理复杂排版、图表和非标准文档。DOCX 文件将使用原生解析。",
                 "supported_formats": [".pdf", ".png", ".jpg", ".jpeg", ".docx"],
+                **_engine_availability("vlm-auto-engine"),
             },
             {
                 "name": "hybrid-auto-engine",
@@ -1110,6 +1140,7 @@ async def list_engines():
                 "version": mineru_ver,
                 "description": "结合 Pipeline 的稳定性与 VLM 的理解能力，提供最高精度的解析效果。DOCX 文件将使用原生解析。",
                 "supported_formats": [".pdf", ".png", ".jpg", ".jpeg", ".docx"],
+                **_engine_availability("hybrid-auto-engine"),
             },
         ],
         "ocr": [],

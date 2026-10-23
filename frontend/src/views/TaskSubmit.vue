@@ -97,14 +97,14 @@
                     <option value="auto">{{ $t('task.backendAuto') }}</option>
 
                     <optgroup label="MinerU (Local)">
-                      <option value="pipeline">{{ $t('task.backendPipeline') }}</option>
-                      <option value="hybrid-auto-engine">{{ $t('task.backendHybridAutoEngine') }}</option>
-                      <option value="vlm-auto-engine">{{ $t('task.backendVlmAutoEngine') }}</option>
+                      <option value="pipeline">{{ backendLabel($t('task.backendPipeline'), 'pipeline') }}</option>
+                      <option value="hybrid-auto-engine">{{ backendLabel($t('task.backendHybridAutoEngine'), 'hybrid-auto-engine') }}</option>
+                      <option value="vlm-auto-engine">{{ backendLabel($t('task.backendVlmAutoEngine'), 'vlm-auto-engine') }}</option>
                     </optgroup>
 
                     <optgroup label="MinerU (Remote Client)">
-                      <option value="hybrid-http-client">{{ $t('task.backendHybridHttpClient') }}</option>
-                      <option value="vlm-http-client">{{ $t('task.backendVlmHttpClient') }}</option>
+                      <option value="hybrid-http-client">{{ backendLabel($t('task.backendHybridHttpClient'), 'hybrid-http-client') }}</option>
+                      <option value="vlm-http-client">{{ backendLabel($t('task.backendVlmHttpClient'), 'vlm-http-client') }}</option>
                     </optgroup>
 
                     <optgroup :label="$t('task.groupPaddleOCR')">
@@ -451,6 +451,8 @@ import {
   ScanText, Send, Sliders, Globe
 } from 'lucide-vue-next'
 import type { Backend, Language, ParseMethod } from '@/api/types'
+import { getEnginesInfo } from '@/api/systemApi'
+import { toast } from '@/utils/toast'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -560,8 +562,53 @@ const currentBackendHint = computed(() => {
     'fasta': t('task.backendFastaHint'),
     'genbank': t('task.backendGenBankHint')
   }
-  return map[config.backend] || ''
+  const base = map[config.backend] || ''
+  const info = engineAvailability.value[config.backend]
+  if (info && info.available === false && info.unavailable_reason) {
+    return `${base} ｜ ${t('task.engineUnavailableWarning')}${info.unavailable_reason}`
+  }
+  return base
 })
+
+// ============================================================
+// 引擎能力探测：后端 /api/v1/engines 返回真实 availability，
+// 避免前端把 mineru 2.x 不支持的 hybrid-* 当成可用引擎展示
+// ============================================================
+interface EngineAvailability {
+  available: boolean
+  effective_backend?: string
+  unavailable_reason?: string | null
+}
+const engineAvailability = ref<Record<string, EngineAvailability>>({})
+
+async function loadEngineAvailability() {
+  try {
+    const res = await getEnginesInfo()
+    const map: Record<string, EngineAvailability> = {}
+    for (const item of res.engines?.document ?? []) {
+      if (item?.name) {
+        map[item.name] = {
+          available: item.available !== false,
+          effective_backend: item.effective_backend,
+          unavailable_reason: item.unavailable_reason ?? null,
+        }
+      }
+    }
+    engineAvailability.value = map
+  } catch (err) {
+    // 探测失败不阻断提交，交给后端做最终降级
+    console.warn('引擎能力探测失败，按默认能力展示:', err)
+  }
+}
+
+/** 引擎下拉项文案：当前环境不支持时追加降级提示 */
+function backendLabel(base: string, name: string): string {
+  const info = engineAvailability.value[name]
+  if (info && info.available === false) {
+    return `${base}${t('task.engineDegradedSuffix')}`
+  }
+  return base
+}
 
 const formulaLabel = computed(() => config.backend.includes('vlm') ? t('task.enableFormulaInterline') : (config.backend.includes('hybrid') ? t('task.enableFormulaInline') : t('task.enableFormulaRecognition')))
 const formulaDescription = computed(() => config.backend.includes('vlm') ? t('task.formulaDisabledHintInterline') : (config.backend.includes('hybrid') ? t('task.formulaDisabledHintInline') : t('task.formulaDisabledHintNormal')))
@@ -622,6 +669,7 @@ function onBackendChange() {
 onMounted(() => {
   const saved = localStorage.getItem('task_submit_config')
   if (saved) { try { const p = JSON.parse(saved); Object.assign(config, p); } catch(e){} }
+  loadEngineAvailability()
 })
 
 watch(() => config, () => { localStorage.setItem('task_submit_config', JSON.stringify(config)) }, { deep: true })
@@ -652,6 +700,15 @@ async function submitTasks() {
   if (isHttpClientBackend.value && !config.server_url) {
     errorMessage.value = "请填写远程服务器地址 (Server URL)"
     return
+  }
+
+  // 引擎不可用不阻断提交（后端会安全降级），但必须让用户知情
+  const selectedEngine = engineAvailability.value[config.backend]
+  if (selectedEngine && selectedEngine.available === false) {
+    toast.warning(
+      `${t('task.engineUnavailableWarning')}${selectedEngine.unavailable_reason || ''}`,
+      5000
+    )
   }
 
   submitting.value = true; errorMessage.value = ''

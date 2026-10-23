@@ -116,8 +116,8 @@ function getToastIcon(type: ToastType): string {
 
 // 便捷方法
 export const toast = {
-  success: (message: string) => showToast({ message, type: 'success' }),
-  error: (message: string) => showToast({ message, type: 'error' }),
-  warning: (message: string) => showToast({ message, type: 'warning' }),
-  info: (message: string) => showToast({ message, type: 'info' }),
+  success: (message: string, duration?: number) => showToast({ message, type: 'success', duration }),
+  error: (message: string, duration?: number) => showToast({ message, type: 'error', duration }),
+  warning: (message: string, duration?: number) => showToast({ message, type: 'warning', duration }),
+  info: (message: string, duration?: number) => showToast({ message, type: 'info', duration }),
 }

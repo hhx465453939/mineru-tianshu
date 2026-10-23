@@ -365,14 +365,6 @@
       :type="confirmDialogType"
       @confirm="executeConfirmedAction"
     />
-
-    <!-- 批量操作确认对话框 -->
-    <ConfirmDialog
-      v-model="showBatchDialog"
-      :title="$t('common.confirm')"
-      :message="batchDialogMessage"
-      @confirm="confirmBatchAction"
-    />
   </div>
 </template>
 
@@ -390,6 +382,17 @@ import {
   XCircle, Copy, Trash2, Play, Pause, RotateCw, Eraser, List, Clock, ChevronDown, Download
 } from 'lucide-vue-next'
 import type { TaskStatus, Backend, Task } from '@/api/types'
+import { toast } from '@/utils/toast'
+
+/** 从 axios 错误里提取可读提示 */
+function extractErrorMessage(err: any, fallback: string): string {
+  return (
+    err?.response?.data?.detail ||
+    err?.response?.data?.message ||
+    err?.message ||
+    fallback
+  )
+}
 
 const { t } = useI18n()
 const taskStore = useTaskStore()
@@ -652,6 +655,7 @@ async function executeConfirmedAction() {
       await pendingAction()
     } catch (err) {
       console.error('Action failed:', err)
+      toast.error(extractErrorMessage(err, t('common.error')))
     } finally {
       pendingAction = null
     }
@@ -672,7 +676,25 @@ function askBatchDelete() {
     actionLoading.value = true
     currentActionType.value = 'batchDelete'
     try {
-      await taskStore.storeBatchDeleteTasks()
+      // ⚠️ 必须显式传入本地选择态：store 内的 selectedTaskIds 与列表页并不互通
+      const res: any = await taskStore.storeBatchDeleteTasks(selectedTasks.value)
+      if (res?.skipped) {
+        toast.warning(t('task.batchDeleteNothingSelected'))
+        return
+      }
+      const deletedCount = res?.deleted?.length ?? 0
+      const failedList = Array.isArray(res?.failed) ? res.failed : []
+      if (deletedCount > 0) {
+        toast.success(t('task.batchDeleteDone', { count: deletedCount }))
+      }
+      if (failedList.length > 0) {
+        toast.warning(
+          t('task.batchDeletePartial', {
+            count: failedList.length,
+            reason: failedList[0]?.reason || '-',
+          })
+        )
+      }
       selectedTasks.value = []
       selectAll.value = false
       await refreshTasks(true)
@@ -693,7 +715,18 @@ function askBatchRestart() {
     actionLoading.value = true
     currentActionType.value = 'batchRestart'
     try {
-      await taskStore.storeBatchRestartTasks()
+      const ids = [...selectedFailedIds.value]
+      if (ids.length === 0) {
+        toast.warning(t('task.batchRestartNothingSelected'))
+        return
+      }
+      const res: any = await taskStore.storeBatchRestartTasks(ids)
+      const restarted = res?.restarted?.length ?? 0
+      const skipped = res?.skipped?.length ?? 0
+      toast.success(t('task.batchRestartDone', { count: restarted }))
+      if (skipped > 0) {
+        toast.warning(t('task.batchRestartSkipped', { count: skipped }))
+      }
       selectedTasks.value = []
       selectAll.value = false
       await refreshTasks(true)
